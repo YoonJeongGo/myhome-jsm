@@ -12,22 +12,22 @@ var tick_timer = 0.0
 var pending_orders = []
 
 # --- UI 노드 연결 ---
-@onready var phase_a_ui = $CanvasLayer/PhaseA
-@onready var news_label = $CanvasLayer/PhaseA/NewsLabel
-@onready var go_trade_btn = $CanvasLayer/PhaseA/GoTradeButton
+@onready var phase_a_ui = $CanvasLayer/UIRoot/PhaseA
+@onready var news_label = $CanvasLayer/UIRoot/PhaseA/VBoxCenter/NewsLabel
+@onready var go_trade_btn = $CanvasLayer/UIRoot/PhaseA/VBoxCenter/GoTradeButton
 
-@onready var phase_b_ui = $CanvasLayer/PhaseB
-@onready var info_label = $CanvasLayer/PhaseB/InfoLabel
-@onready var asset_label = $CanvasLayer/PhaseB/AssetLabel
-@onready var stock_select = $CanvasLayer/PhaseB/StockSelectButton
-@onready var time_label = $CanvasLayer/PhaseB/TimeLabel
-@onready var chart_line = $CanvasLayer/PhaseB/ChartLine
-@onready var order_type_select = $CanvasLayer/PhaseB/OrderTypeSelect
-@onready var order_amount_input = $CanvasLayer/PhaseB/OrderAmountInput
-@onready var order_price_input = $CanvasLayer/PhaseB/OrderPriceInput
+@onready var phase_b_ui = $CanvasLayer/UIRoot/PhaseB
+@onready var info_label = $CanvasLayer/UIRoot/PhaseB/HBoxMain/RightPanel/VBoxRight/InfoLabel
+@onready var asset_label = $CanvasLayer/UIRoot/PhaseB/HBoxMain/RightPanel/VBoxRight/AssetLabel
+@onready var stock_select = $CanvasLayer/UIRoot/PhaseB/HBoxMain/LeftPanel/VBoxLeft/TopBar/StockSelectButton
+@onready var time_label = $CanvasLayer/UIRoot/PhaseB/HBoxMain/LeftPanel/VBoxLeft/TopBar/TimeLabel
+@onready var chart_line = $CanvasLayer/UIRoot/PhaseB/HBoxMain/LeftPanel/VBoxLeft/ChartLine
+@onready var order_type_select = $CanvasLayer/UIRoot/PhaseB/HBoxMain/RightPanel/VBoxRight/OrderPanel/OrderTypeSelect
+@onready var order_amount_input = $CanvasLayer/UIRoot/PhaseB/HBoxMain/RightPanel/VBoxRight/OrderPanel/OrderAmountInput
+@onready var order_price_input = $CanvasLayer/UIRoot/PhaseB/HBoxMain/RightPanel/VBoxRight/OrderPanel/OrderPriceInput
 
-@onready var phase_c_ui = $CanvasLayer/PhaseC
-@onready var result_label = $CanvasLayer/PhaseC/ResultLabel
+@onready var phase_c_ui = $CanvasLayer/UIRoot/PhaseC
+@onready var result_label = $CanvasLayer/UIRoot/PhaseC/VBoxC/ResultLabel
 
 var has_checked_news = false
 var has_worked_today = false
