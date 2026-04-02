@@ -1,0 +1,179 @@
+[gd_scene format=3 uid="uid://dsppeeedj4r6q"]
+
+[ext_resource type="Script" uid="uid://b1lnx0kdoo1h0" path="res://main.gd" id="1_ig7tw"]
+
+[node name="Main" type="Node2D" unique_id=1003666403]
+script = ExtResource("1_ig7tw")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=720202561]
+
+[node name="NextDayButton" type="Button" parent="CanvasLayer" unique_id=47269537]
+offset_left = 187.0
+offset_top = 318.0
+offset_right = 300.0
+offset_bottom = 349.0
+text = "다음 날로 가기"
+
+[node name="RentLabel" type="Label" parent="CanvasLayer" unique_id=57143501]
+offset_left = 249.0
+offset_top = 12.0
+offset_right = 429.0
+offset_bottom = 35.0
+text = "월세 납부까지: 30일 남음"
+
+[node name="PhaseA" type="Control" parent="CanvasLayer" unique_id=519216041]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="NewsLabel" type="Label" parent="CanvasLayer/PhaseA" unique_id=1750074229]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 110.0
+offset_right = 171.0
+offset_bottom = 133.0
+text = "[오늘의 뉴스 대기 중...]"
+
+[node name="InternetButton" type="Button" parent="CanvasLayer/PhaseA/NewsLabel" unique_id=1725422851]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 135.0
+offset_right = 157.0
+offset_bottom = 166.0
+text = "인터넷 기사 (중도형)"
+
+[node name="TvNewsButton" type="Button" parent="CanvasLayer/PhaseA/NewsLabel" unique_id=1461132938]
+layout_mode = 0
+offset_left = 1.0
+offset_top = 101.0
+offset_right = 163.0
+offset_bottom = 132.0
+text = "TV 뉴스 보기 (안정형)"
+
+[node name="YoutubeButton" type="Button" parent="CanvasLayer/PhaseA/NewsLabel" unique_id=741971774]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 169.0
+offset_right = 174.0
+offset_bottom = 200.0
+text = "유튜브 찌라시 (도전형)"
+
+[node name="GoTradeButton" type="Button" parent="CanvasLayer/PhaseA" unique_id=731410336]
+layout_mode = 0
+offset_left = 472.0
+offset_top = 234.0
+offset_right = 557.0
+offset_bottom = 265.0
+text = "일하러가기 "
+
+[node name="PhaseB" type="Control" parent="CanvasLayer" unique_id=1777483664]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="StockSelectButton" type="OptionButton" parent="CanvasLayer/PhaseB" unique_id=1348074292]
+layout_mode = 0
+offset_left = 479.0
+offset_top = 236.0
+offset_right = 511.0
+offset_bottom = 256.0
+
+[node name="BuyButton" type="Button" parent="CanvasLayer/PhaseB/StockSelectButton" unique_id=246829868]
+layout_mode = 0
+offset_left = -469.0
+offset_top = 86.0
+offset_right = -385.0
+offset_bottom = 117.0
+text = "매수 (Buy)"
+
+[node name="SellButton" type="Button" parent="CanvasLayer/PhaseB" unique_id=93152844]
+layout_mode = 0
+offset_left = 513.0
+offset_top = 318.0
+offset_right = 595.0
+offset_bottom = 349.0
+text = "매도 (Sell)"
+
+[node name="AssetLabel" type="Label" parent="CanvasLayer/PhaseB" unique_id=1435882156]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 117.0
+offset_bottom = 33.0
+text = "내 자산 현황판"
+
+[node name="InfoLabel" type="Label" parent="CanvasLayer/PhaseB" unique_id=1008865968]
+layout_mode = 0
+offset_left = 479.0
+offset_top = 33.0
+offset_right = 600.0
+offset_bottom = 56.0
+text = "시장 정보 현황판"
+
+[node name="TimeLabel" type="Label" parent="CanvasLayer/PhaseB" unique_id=64379193]
+layout_mode = 0
+offset_left = 463.0
+offset_top = 57.0
+offset_right = 503.0
+offset_bottom = 80.0
+
+[node name="ChartLine" type="Line2D" parent="CanvasLayer/PhaseB" unique_id=125247971]
+points = PackedVector2Array(188, 93)
+width = 2.0
+
+[node name="OrderTypeSelect" type="OptionButton" parent="CanvasLayer/PhaseB" unique_id=1303734083]
+layout_mode = 0
+offset_left = 158.0
+offset_top = 251.0
+offset_right = 193.0
+offset_bottom = 275.0
+
+[node name="OrderAmountInput" type="LineEdit" parent="CanvasLayer/PhaseB" unique_id=1176694779]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 244.0
+offset_right = 100.0
+offset_bottom = 281.0
+text = "주문 수량 "
+
+[node name="OrderPriceInput" type="LineEdit" parent="CanvasLayer/PhaseB" unique_id=285103896]
+layout_mode = 0
+offset_left = 107.0
+offset_top = 247.0
+offset_right = 211.0
+offset_bottom = 278.0
+placeholder_text = "지정가 입력"
+
+[node name="PhaseC" type="Control" parent="CanvasLayer" unique_id=1659635109]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 510.0
+offset_top = 67.0
+offset_right = 562.0
+offset_bottom = 94.0
+
+[node name="ResultLabel" type="Label" parent="CanvasLayer/PhaseC" unique_id=240137432]
+layout_mode = 0
+offset_left = 499.0
+offset_top = 45.0
+offset_right = 539.0
+offset_bottom = 68.0
+
+[node name="WorkButton" type="Button" parent="CanvasLayer/PhaseC" unique_id=1169144154]
+layout_mode = 0
+offset_left = 343.0
+offset_top = 317.0
+offset_right = 484.0
+offset_bottom = 348.0
+text = "알바하기 (+5만 원)"
+
+[connection signal="pressed" from="CanvasLayer/NextDayButton" to="." method="_on_next_day_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseA/NewsLabel/InternetButton" to="." method="_on_internet_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseA/NewsLabel/TvNewsButton" to="." method="_on_tv_news_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseA/NewsLabel/YoutubeButton" to="." method="_on_youtube_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseA/GoTradeButton" to="." method="_on_go_trade_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseB/StockSelectButton/BuyButton" to="." method="_on_buy_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseB/SellButton" to="." method="_on_sell_button_pressed"]
+[connection signal="pressed" from="CanvasLayer/PhaseC/WorkButton" to="." method="_on_work_button_pressed"]

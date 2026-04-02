@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://owrpecmuuxjq"
+
+[deps]
+
+files=["res://data_0443_20260327.종목명.translation", "res://data_0443_20260327.종가.translation", "res://data_0443_20260327.대비.translation", "res://data_0443_20260327.등락률.translation", "res://data_0443_20260327.시가.translation", "res://data_0443_20260327.고가.translation", "res://data_0443_20260327.저가.translation", "res://data_0443_20260327.거래량.translation", "res://data_0443_20260327.거래대금.translation", "res://data_0443_20260327.시가총액.translation", "res://data_0443_20260327.상장주식수.translation"]
+
+source_file="res://data_0443_20260327.csv"
+dest_files=["res://data_0443_20260327.종목명.translation", "res://data_0443_20260327.종가.translation", "res://data_0443_20260327.대비.translation", "res://data_0443_20260327.등락률.translation", "res://data_0443_20260327.시가.translation", "res://data_0443_20260327.고가.translation", "res://data_0443_20260327.저가.translation", "res://data_0443_20260327.거래량.translation", "res://data_0443_20260327.거래대금.translation", "res://data_0443_20260327.시가총액.translation", "res://data_0443_20260327.상장주식수.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,30 @@
+63f7b34db8d8cdea90c76aacccf841ec
+::res://::1775103025
+data_0443_20260327.csv::Translation::1029119311063145982::1775102902::1775103026::1::::<><><>0<>0<>ceed592ec18fd44684961ce5ece0227d<>res://data_0443_20260327.종목명.translation<*>res://data_0443_20260327.종가.translation<*>res://data_0443_20260327.대비.translation<*>res://data_0443_20260327.등락률.translation<*>res://data_0443_20260327.시가.translation<*>res://data_0443_20260327.고가.translation<*>res://data_0443_20260327.저가.translation<*>res://data_0443_20260327.거래량.translation<*>res://data_0443_20260327.거래대금.translation<*>res://data_0443_20260327.시가총액.translation<*>res://data_0443_20260327.상장주식수.translation::
+data_0443_20260327.거래대금.translation::OptimizedTranslation::9075406086849977095::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.거래량.translation::OptimizedTranslation::6801002382661055670::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.고가.translation::OptimizedTranslation::6558775807039772311::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.대비.translation::OptimizedTranslation::365565431226346805::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.등락률.translation::OptimizedTranslation::7895866398548849153::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.상장주식수.translation::OptimizedTranslation::4789494537924054838::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.시가.translation::OptimizedTranslation::4132259613430104742::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.시가총액.translation::OptimizedTranslation::46734409693022579::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.저가.translation::OptimizedTranslation::5421687565248961338::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.종가.translation::OptimizedTranslation::4268828770668084099::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.종목명.translation::OptimizedTranslation::9002897588056126993::1775103026::0::1::::<><><>0<>0<><>::
+data_0443_20260327.�ð�.translation::OptimizedTranslation::8579268780132646950::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.�ð��Ѿ�.translation::OptimizedTranslation::8843973396437204557::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.�ŷ���.translation::OptimizedTranslation::2475872069894151329::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.�ŷ����.translation::OptimizedTranslation::7237794690139409492::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.���.translation::OptimizedTranslation::2337802546137212316::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.����.translation::OptimizedTranslation::2411619855723626429::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.�����.translation::OptimizedTranslation::4843791219460771153::1775102902::0::1::::<><><>0<>0<><>::
+data_0443_20260327.�����ֽļ�.translation::OptimizedTranslation::7832945149302017095::1775102902::0::1::::<><><>0<>0<><>::
+icon.svg::CompressedTexture2D::4203669191776049923::1775102902::1775103026::1::::<><><>0<>0<>fc27ef22db47703a21c102f566961c8c<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
+main.gd::GDScript::4234870496429770527::1775102902::0::1::::<>Node2D<><>0<>0<><>::
+main.tscn::PackedScene::8454545017364011338::1775102902::0::1::::<><><>0<>0<><>::uid://b1lnx0kdoo1h0::::res://main.gd
+MarketManager.gd::GDScript::147583326398808166::1775102902::0::1::::<>Node<><>0<>0<><>::
+stock_data.csv::Translation::8491560413491749431::1775102902::1775103026::1::::<><><>0<>0<>d3353ca83989cab643c083f83682e666<>res://stock_data.Price.translation::
+stock_data.Price.translation::OptimizedTranslation::6084163934168025396::1775103026::0::1::::<><><>0<>0<><>::
+새 텍스트 문서 (2).txt::TextFile::-1::1775102902::0::1::::<><><>0<>0<><>::
+새 텍스트 문서.txt::TextFile::-1::1775102902::0::1::::<><><>0<>0<><>::

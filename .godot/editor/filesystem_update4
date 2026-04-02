@@ -1,0 +1,16 @@
+res://stock_data.Price.translation
+res://data_0443_20260327.종목명.translation
+res://data_0443_20260327.종가.translation
+res://data_0443_20260327.대비.translation
+res://data_0443_20260327.등락률.translation
+res://data_0443_20260327.시가.translation
+res://data_0443_20260327.고가.translation
+res://data_0443_20260327.저가.translation
+res://data_0443_20260327.거래량.translation
+res://data_0443_20260327.거래대금.translation
+res://data_0443_20260327.시가총액.translation
+res://data_0443_20260327.상장주식수.translation
+res://main.tscn
+res://main.gd
+res://MarketManager.gd
+res://stock_data.csv
