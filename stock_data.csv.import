@@ -6,10 +6,10 @@ uid="uid://ds8m023t1b6jb"
 
 [deps]
 
-files=["res://stock_data.Price.translation"]
+files=["res://stock_data.name.translation", "res://stock_data.day.translation", "res://stock_data.price.translation"]
 
 source_file="res://stock_data.csv"
-dest_files=["res://stock_data.Price.translation"]
+dest_files=["res://stock_data.name.translation", "res://stock_data.day.translation", "res://stock_data.price.translation"]
 
 [params]
 
