@@ -1,7 +1,2 @@
-res://main.tscn
-res://GameManager.gd
-res://NewsManager.gd
-res://PortfolioManager.gd
-res://TimeManager.gd
-res://MarketManager.gd
 res://main.gd
+res://MarketManager.gd

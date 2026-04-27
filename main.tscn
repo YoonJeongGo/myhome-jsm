@@ -10,18 +10,26 @@ script = ExtResource("1_elqb8")
 [node name="UIRoot" type="Control" parent="CanvasLayer" unique_id=1000000002]
 layout_mode = 3
 anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_right = 1600.0
-offset_bottom = 900.0
-grow_horizontal = 2
-grow_vertical = 0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
 
 [node name="TopBar" type="HBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000003]
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 0
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 64.0
 
 [node name="TimeLabel" type="Label" parent="CanvasLayer/UIRoot/TopBar" unique_id=1000000004]
 layout_mode = 2
@@ -50,27 +58,16 @@ text = "총자산: 0원"
 layout_mode = 2
 text = "평가손익: 0원"
 
-[node name="DebugBackground" type="ColorRect" parent="CanvasLayer/UIRoot" unique_id=1000000100]
-layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 0
-color = Color(0.05, 0.05, 0.15, 1)
-
-[node name="DebugLabel" type="Label" parent="CanvasLayer/UIRoot" unique_id=1000000101]
-custom_minimum_size = Vector2(400, 40)
-layout_mode = 0
-text = "DEBUG UI: Main scene loaded"
 
 [node name="ScreenMarket" type="VBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000011]
 layout_mode = 0
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 0.0
 offset_top = 64.0
+offset_right = 0.0
 offset_bottom = 96.0
 
 [node name="SearchBar" type="HBoxContainer" parent="CanvasLayer/UIRoot/ScreenMarket" unique_id=1000000012]
@@ -96,10 +93,26 @@ layout_mode = 2
 [node name="ScreenDetail" type="VBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000017]
 visible = false
 layout_mode = 0
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 0.0
 offset_top = 64.0
+offset_right = 0.0
 offset_bottom = 96.0
+
+[node name="TradeButtons" type="HBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000038]
+layout_mode = 0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -320.0
+offset_top = -128.0
+offset_right = -24.0
+offset_bottom = -24.0
+z_index = 1
 
 [node name="DetailHeader" type="HBoxContainer" parent="CanvasLayer/UIRoot/ScreenDetail" unique_id=1000000018]
 custom_minimum_size = Vector2(0, 72)
@@ -179,23 +192,28 @@ text = "평가금액: -"
 layout_mode = 2
 text = "평가손익: 0원"
 
-[node name="TradeButtons" type="HBoxContainer" parent="CanvasLayer/UIRoot/ScreenDetail" unique_id=1000000038]
-layout_mode = 2
-
-[node name="BuyLargeButton" type="Button" parent="CanvasLayer/UIRoot/ScreenDetail/TradeButtons" unique_id=1000000039]
+[node name="BuyLargeButton" type="Button" parent="CanvasLayer/UIRoot/TradeButtons" unique_id=1000000039]
 layout_mode = 2
 text = "▲ 매수"
+size_flags_horizontal = 0
+size_flags_vertical = 0
 
-[node name="SellLargeButton" type="Button" parent="CanvasLayer/UIRoot/ScreenDetail/TradeButtons" unique_id=1000000040]
+[node name="SellLargeButton" type="Button" parent="CanvasLayer/UIRoot/TradeButtons" unique_id=1000000040]
 layout_mode = 2
 text = "▼ 매도"
+size_flags_horizontal = 0
+size_flags_vertical = 0
 
 [node name="ScreenPortfolio" type="VBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000041]
 visible = false
 layout_mode = 0
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 0.0
 offset_top = 64.0
+offset_right = 0.0
 offset_bottom = 96.0
 
 [node name="SummaryCard" type="Panel" parent="CanvasLayer/UIRoot/ScreenPortfolio" unique_id=1000000042]
@@ -235,9 +253,13 @@ layout_mode = 2
 [node name="ScreenSave" type="VBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000051]
 visible = false
 layout_mode = 0
+anchor_left = 0.0
+anchor_top = 0.0
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 0.0
 offset_top = 64.0
+offset_right = 0.0
 offset_bottom = 96.0
 
 [node name="SaveInput" type="LineEdit" parent="CanvasLayer/UIRoot/ScreenSave" unique_id=1000000052]
@@ -262,6 +284,15 @@ layout_mode = 2
 [node name="BottomNav" type="HBoxContainer" parent="CanvasLayer/UIRoot" unique_id=1000000057]
 custom_minimum_size = Vector2(0, 96)
 layout_mode = 0
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = -96.0
+offset_right = 0.0
+offset_bottom = 0.0
+z_index = 0
 
 [node name="NavMarket" type="Button" parent="CanvasLayer/UIRoot/BottomNav" unique_id=1000000058]
 layout_mode = 2

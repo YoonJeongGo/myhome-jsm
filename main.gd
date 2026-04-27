@@ -24,6 +24,7 @@ const TOAST_DURATION: float = 2.0
 @onready var detail_ticker = $CanvasLayer/UIRoot/ScreenDetail/DetailHeader/DetailText/DetailTicker
 @onready var price_label = $CanvasLayer/UIRoot/ScreenDetail/PriceLabel
 @onready var change_label = $CanvasLayer/UIRoot/ScreenDetail/ChangeLabel
+@onready var chart_panel = $CanvasLayer/UIRoot/ScreenDetail/ChartPanel
 @onready var open_label = $CanvasLayer/UIRoot/ScreenDetail/PriceGrid/OpenLabel
 @onready var high_label = $CanvasLayer/UIRoot/ScreenDetail/PriceGrid/HighLabel
 @onready var low_label = $CanvasLayer/UIRoot/ScreenDetail/PriceGrid/LowLabel
@@ -32,8 +33,9 @@ const TOAST_DURATION: float = 2.0
 @onready var avg_label = $CanvasLayer/UIRoot/ScreenDetail/MyStockInfo/MyStockVBox/AvgLabel
 @onready var eval_label = $CanvasLayer/UIRoot/ScreenDetail/MyStockInfo/MyStockVBox/EvalLabel
 @onready var pnl_label = $CanvasLayer/UIRoot/ScreenDetail/MyStockInfo/MyStockVBox/PnlLabel
-@onready var buy_large_button = $CanvasLayer/UIRoot/ScreenDetail/TradeButtons/BuyLargeButton
-@onready var sell_large_button = $CanvasLayer/UIRoot/ScreenDetail/TradeButtons/SellLargeButton
+@onready var buy_large_button = $CanvasLayer/UIRoot/TradeButtons/BuyLargeButton
+@onready var sell_large_button = $CanvasLayer/UIRoot/TradeButtons/SellLargeButton
+@onready var trade_buttons = $CanvasLayer/UIRoot/TradeButtons
 
 @onready var portfolio_cash = $CanvasLayer/UIRoot/ScreenPortfolio/SummaryCard/SummaryVBox/PortfolioCash
 @onready var portfolio_eval = $CanvasLayer/UIRoot/ScreenPortfolio/SummaryCard/SummaryVBox/PortfolioEval
@@ -82,18 +84,6 @@ func _ready() -> void:
 	_refresh_all()
 	switch_screen("market")
 	print("market ids:", MarketManager.get_all_stock_ids())
-
-	var runtime_debug_bg = ColorRect.new()
-	runtime_debug_bg.color = Color(0.0, 0.0, 0.0, 0.5)
-	runtime_debug_bg.anchors_preset = Control.PRESET_FULL_RECT
-	UIRoot.add_child(runtime_debug_bg)
-
-	var runtime_debug = Label.new()
-	runtime_debug.text = "RUNTIME DEBUG ACTIVE"
-	runtime_debug.anchors_preset = Control.PRESET_TOP_LEFT
-	runtime_debug.rect_position = Vector2(10, 10)
-	runtime_debug.add_theme_color_override("font_color", Color(1, 0.8, 0.2))
-	UIRoot.add_child(runtime_debug)
 
 	if TimeManager.has_signal("time_changed"):
 		TimeManager.time_changed.connect(_on_time_changed)
@@ -144,6 +134,7 @@ func switch_screen(screen_name: String) -> void:
 	screen_detail.visible = screen_name == "detail"
 	screen_portfolio.visible = screen_name == "portfolio"
 	screen_save.visible = screen_name == "save"
+	trade_buttons.visible = screen_name == "detail"
 
 	if screen_name == "market":
 		render_stock_list()
@@ -198,13 +189,29 @@ func render_detail() -> void:
 
 	var stock_name = MarketManager.get_stock_name(selected_stock_id)
 	var price = MarketManager.get_price(selected_stock_id)
+	var history = MarketManager.get_intraday_history(selected_stock_id)
+
 	detail_name.text = stock_name
 	detail_ticker.text = selected_stock_id
 	price_label.text = "%s원" % fmt(price)
-	change_label.text = "현재가"
-	open_label.text = "시가: -"
-	high_label.text = "고가: -"
-	low_label.text = "저가: -"
+
+	if history.size() > 0:
+		var open_price = int(history[0])
+		var high_price = int(history.max())
+		var low_price = int(history.min())
+		var diff = price - open_price
+		var percent_change = 0.0 if open_price == 0 else float(diff) / float(open_price) * 100.0
+
+		change_label.text = "전일대비: %s원 (%+.2f%%)" % [fmt(diff), percent_change]
+		open_label.text = "시가: %s원" % fmt(open_price)
+		high_label.text = "고가: %s원" % fmt(high_price)
+		low_label.text = "저가: %s원" % fmt(low_price)
+	else:
+		change_label.text = "전일대비: -"
+		open_label.text = "시가: -"
+		high_label.text = "고가: -"
+		low_label.text = "저가: -"
+
 	vol_label.text = "거래량: -"
 
 	var holding = PortfolioManager.get_holding(selected_stock_id)
@@ -219,6 +226,38 @@ func render_detail() -> void:
 	buy_price.text = "단가: %s원" % fmt(price)
 	sell_name.text = stock_name
 	sell_price.text = "단가: %s원" % fmt(price)
+
+	_draw_stock_chart(selected_stock_id)
+
+func _draw_stock_chart(stock_id: String) -> void:
+	if chart_panel == null:
+		return
+
+	for child in chart_panel.get_children():
+		if child is Line2D:
+			child.queue_free()
+
+	var history = MarketManager.get_intraday_history(stock_id)
+	if history.size() < 2:
+		return
+
+	var chart_width = max(chart_panel.get_size().x - 24.0, 1.0)
+	var chart_height = max(chart_panel.get_size().y - 24.0, 1.0)
+	var min_price = int(history.min())
+	var max_price = int(history.max())
+	var value_range = max(max_price - min_price, 1)
+
+	var chart_line = Line2D.new()
+	chart_line.width = 3
+	chart_line.default_color = Color(0.2, 0.8, 0.4)
+	chart_line.position = Vector2.ZERO
+
+	for i in range(history.size()):
+		var x = 12.0 + chart_width * float(i) / float(history.size() - 1)
+		var y = 12.0 + chart_height * (1.0 - float(int(history[i]) - min_price) / float(value_range))
+		chart_line.add_point(Vector2(x, y))
+
+	chart_panel.add_child(chart_line)
 
 func render_portfolio() -> void:
 	portfolio_cash.text = "현금: %s원" % fmt(PortfolioManager.get_cash())
@@ -302,16 +341,16 @@ func _on_sell_qty_changed(_new_text: String) -> void:
 
 func _update_buy_total() -> void:
 	var price = MarketManager.get_price(selected_stock_id)
-	var qty = int(buy_qty.text) if buy_qty.text.is_valid_integer() else 0
+	var qty = buy_qty.text.to_int()
 	buy_total.text = "총 금액: %s원" % fmt(price * qty)
 
 func _update_sell_total() -> void:
 	var price = MarketManager.get_price(selected_stock_id)
-	var qty = int(sell_qty.text) if sell_qty.text.is_valid_integer() else 0
+	var qty = sell_qty.text.to_int()
 	sell_total.text = "총 금액: %s원" % fmt(price * qty)
 
 func _on_confirm_buy() -> void:
-	var qty = int(buy_qty.text) if buy_qty.text.is_valid_integer() else 0
+	var qty = buy_qty.text.to_int()
 	if qty <= 0:
 		_show_toast("올바른 수량을 입력하세요.")
 		return
@@ -324,7 +363,7 @@ func _on_confirm_buy() -> void:
 	_refresh_all()
 
 func _on_confirm_sell() -> void:
-	var qty = int(sell_qty.text) if sell_qty.text.is_valid_integer() else 0
+	var qty = sell_qty.text.to_int()
 	if qty <= 0:
 		_show_toast("올바른 수량을 입력하세요.")
 		return

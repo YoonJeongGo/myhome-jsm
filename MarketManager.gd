@@ -21,6 +21,9 @@ func _ready():
 	randomize()
 	load_market_data(MARKET_DATA_PATH)
 
+	if has_node("/root/TimeManager") and TimeManager.has_signal("time_changed"):
+		TimeManager.time_changed.connect(Callable(self, "_on_time_changed"))
+
 func load_market_data(file_path: String) -> void:
 	_reset_all_data()
 
@@ -225,8 +228,21 @@ func get_price(stock_id: String) -> float:
 func get_all_stock_ids() -> Array:
 	return ticker_to_name.keys()
 
+func get_intraday_history(stock_id: String) -> Array:
+	var stock_name = get_stock_name(stock_id)
+	if stock_name == "" or not intraday_history.has(stock_name):
+		return []
+	return intraday_history[stock_name].duplicate()
+
 func get_tick_index() -> int:
 	return tick_index
+
+func _on_time_changed(hour: int, minute: int) -> void:
+	# Only advance prices during regular market hours
+	if hour >= 9 and (hour < 15 or (hour == 15 and minute < 30)):
+		tick_realtime()
+		if has_signal("prices_updated"):
+			prices_updated.emit()
 
 func apply_trend(stock_id: String, trend_value: float) -> void:
 	var stock_name = get_stock_name(stock_id)
