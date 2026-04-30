@@ -75,12 +75,12 @@ const NEWS_DB := {
 
 # ── 게임 상태 ──
 var G := {
-	"day": 1, "cash": 10000000, "startCash": 10000000,
-	"portfolio": {}, "pendingOrders": [],
+	"day": 1, "startCash": 10000000,
 	"todayPnl": 0, "realPnl": 0, "tradeCount": 0, "refundAmt": 0,
 	"workDone": false, "workIncome": 0, "todayExpense": 0,
 	"rentDue": 30, "newsSelected": "", "curStock": 0, "tickIdx": 0,
 }
+var trade_history: Array = []  # [{day, type, name, qty, price, total, pnl}]
 var prices: Array = []
 var all_hist: Array = []
 var biases: Array = []
@@ -96,6 +96,8 @@ var scr_morning: Control
 var scr_trade: Control
 var scr_settle: Control
 var scr_night: Control
+var scr_gameover: Control
+var scr_victory: Control
 
 # HUD
 var hud_day_v: Label
@@ -123,6 +125,12 @@ var stock_list_vbox_node: VBoxContainer
 var stock_search_edit: LineEdit
 var stock_scroll_cont: ScrollContainer
 var chart_line: Line2D
+var chart_ma5_line: Line2D
+var chart_base_line: Line2D
+var chart_y_max_lbl: Label
+var chart_y_mid_lbl: Label
+var chart_y_min_lbl: Label
+var chart_cur_lbl: Label
 var chart_bg: Panel
 var price_num_lbl: Label
 var price_chg_lbl: Label
@@ -180,20 +188,27 @@ var stc_chg_lbl: Label
 var gpb_bar: ProgressBar
 var gpb_pct_lbl: Label
 var s_holdings_vbox: VBoxContainer
-var settle_act_ctrl: Control
-var wo_cv_btn: Button
-var wo_tutor_btn: Button
-var wo_rest_btn: Button
+var settle_hist_vbox: VBoxContainer
+var settle_cta_btn: Button
+var settle_work_cards: Array = []
+var settle_selected_work: String = ""
+var settle_selected_pay: int = 0
+var sc_day_lbl: Label
 
 # 일간
 var night_msg_lbl: Label
 var n_day_lbl: Label
 var n_total_lbl: Label
 var n_pnl_lbl: Label
+var n_pnl_pct_lbl: Label
+var n_cnt_lbl: Label
 var n_work_lbl: Label
 var n_exp_lbl: Label
 var n_goal_lbl: Label
-var n_nextday_lbl: Label
+var n_goal_bar: ProgressBar
+var n_goal_remain_lbl: Label
+var n_trade_sum_lbl: Label
+var n_real_pnl_lbl: Label
 
 # 토스트
 var toast_panel: PanelContainer
@@ -207,6 +222,16 @@ func _ready():
 	_init_game_data()
 	_build_ui()
 	show_screen("menu")
+	GameManager.game_over_triggered.connect(_on_game_over)
+	GameManager.victory_triggered.connect(_on_victory)
+
+func _on_game_over(_reason: String):
+	trade_tmr.stop()
+	show_screen("gameover")
+
+func _on_victory(_reason: String):
+	trade_tmr.stop()
+	show_screen("victory")
 
 func _load_stocks_from_csv():
 	STOCKS.clear()
@@ -279,11 +304,13 @@ func _build_ui():
 	sa.set_anchor_and_offset(SIDE_BOTTOM, 1.0, 0.0)
 	ui_root.add_child(sa)
 
-	scr_menu    = _build_menu(sa)
-	scr_morning = _build_morning(sa)
-	scr_trade   = _build_trade(sa)
-	scr_settle  = _build_settle(sa)
-	scr_night   = _build_night(sa)
+	scr_menu     = _build_menu(sa)
+	scr_morning  = _build_morning(sa)
+	scr_trade    = _build_trade(sa)
+	scr_settle   = _build_settle(sa)
+	scr_night    = _build_night(sa)
+	scr_gameover = _build_gameover(sa)
+	scr_victory  = _build_victory(sa)
 
 	_build_toast()
 	_build_modal()
@@ -483,12 +510,17 @@ func _build_menu(parent: Control) -> Control:
 	center.add_child(stats)
 
 	# 버튼
-	var start_btn = _btn("▶ 게임 시작", C_BLUE, Color.WHITE, 10)
+	var start_btn = _btn("▶ 새 게임 시작", C_BLUE, Color.WHITE, 10)
 	start_btn.custom_minimum_size = Vector2(260, 48)
 	start_btn.pressed.connect(_on_start_game)
 	center.add_child(start_btn)
 
-	var ver = _lbl("v0.6.0-alpha", C_TEXT3, 10)
+	var load_btn = _btn("📂 이어하기", C_PANEL2, C_TEXT2, 10)
+	load_btn.custom_minimum_size = Vector2(260, 36)
+	load_btn.pressed.connect(_load_game)
+	center.add_child(load_btn)
+
+	var ver = _lbl("v0.7.0-alpha", C_TEXT3, 10)
 	ver.set_anchor_and_offset(SIDE_RIGHT,  1.0, -20.0)
 	ver.set_anchor_and_offset(SIDE_BOTTOM, 1.0, -18.0)
 	scr.add_child(ver)
@@ -731,10 +763,33 @@ func _build_trade(parent: Control) -> Control:
 	chart_bg.add_theme_stylebox_override("panel", _sb(C_PANEL, 1, C_BORDER, 8))
 	left.add_child(chart_bg)
 
+	# 기준가(시가) 참조 라인
+	chart_base_line = Line2D.new()
+	chart_base_line.width = 1.0
+	chart_base_line.default_color = Color(C_TEXT3.r, C_TEXT3.g, C_TEXT3.b, 0.5)
+	chart_bg.add_child(chart_base_line)
+
+	# MA5 이동평균선
+	chart_ma5_line = Line2D.new()
+	chart_ma5_line.width = 1.5
+	chart_ma5_line.default_color = C_GOLD
+	chart_bg.add_child(chart_ma5_line)
+
+	# 주가 라인 (맨 위에)
 	chart_line = Line2D.new()
 	chart_line.width = 2.0
 	chart_line.default_color = C_UP
 	chart_bg.add_child(chart_line)
+
+	# Y축 라벨 (차트 위에 플로팅)
+	chart_y_max_lbl = _lbl("", C_TEXT3, 9)
+	chart_bg.add_child(chart_y_max_lbl)
+	chart_y_mid_lbl = _lbl("", C_TEXT3, 9)
+	chart_bg.add_child(chart_y_mid_lbl)
+	chart_y_min_lbl = _lbl("", C_TEXT3, 9)
+	chart_bg.add_child(chart_y_min_lbl)
+	chart_cur_lbl = _lbl("", C_UP, 9)
+	chart_bg.add_child(chart_cur_lbl)
 
 	# 통계 바 (차트 아래, 시간축 위)
 	var stat_bar = HBoxContainer.new()
@@ -899,116 +954,219 @@ func _build_settle(parent: Control) -> Control:
 	var scr = Control.new()
 	scr.set_anchors_preset(Control.PRESET_FULL_RECT)
 	parent.add_child(scr)
-	var bg = ColorRect.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.color = C_BG
-	scr.add_child(bg)
+	var bg = ColorRect.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color("#07090e"); scr.add_child(bg)
 
 	var scroll = ScrollContainer.new()
 	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scr.add_child(scroll)
 
-	var hb = HBoxContainer.new()
-	hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hb.add_theme_constant_override("separation", 16)
-	scroll.add_child(hb)
+	var margin = MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for s in ["margin_left","margin_right","margin_top","margin_bottom"]:
+		margin.add_theme_constant_override(s, 20)
+	scroll.add_child(margin)
 
-	# 왼쪽 컬럼
+	var root = VBoxContainer.new()
+	root.add_theme_constant_override("separation", 14)
+	margin.add_child(root)
+
+	# ── 1. 헤더 ──────────────────────────────────────────────
+	var hdr = PanelContainer.new()
+	hdr.add_theme_stylebox_override("panel", _sb(C_PANEL2, 0, C_BORDER, 10))
+	root.add_child(hdr)
+	var hdr_vb = VBoxContainer.new(); hdr_vb.add_theme_constant_override("separation", 4)
+	hdr.add_child(hdr_vb)
+	sc_day_lbl = _lbl("🌙 DAY 1 야간 정산", C_TEXT, 20)
+	sc_day_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hdr_vb.add_child(sc_day_lbl)
+	var hdr_sub = _lbl("오늘의 결과를 확인하고 밤 활동을 선택하세요", C_TEXT3, 11)
+	hdr_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hdr_vb.add_child(hdr_sub)
+
+	# ── 2. 메인 2컬럼 ──────────────────────────────────────────
+	var main_hb = HBoxContainer.new()
+	main_hb.add_theme_constant_override("separation", 14)
+	root.add_child(main_hb)
+
+	# 왼쪽 컬럼 (결과 + 보유종목 + 거래내역)
 	var lc = VBoxContainer.new()
-	lc.custom_minimum_size = Vector2(330, 0)
-	lc.add_theme_constant_override("separation", 11)
-	hb.add_child(lc)
+	lc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lc.add_theme_constant_override("separation", 10)
+	main_hb.add_child(lc)
 
-	# 거래 결과
-	var res_card = _sc_card("📊 오늘 거래 결과", lc)
-	sc_real_lbl   = _sc_row(res_card, "실현이익",     "+0원", C_UP)
-	sc_unreal_lbl = _sc_row(res_card, "평가이익",     "0원")
-	sc_refund_lbl = _sc_row(res_card, "미체결 환불",  "없음")
-	sc_cnt_lbl    = _sc_row(res_card, "총 거래 횟수", "0회")
+	# 거래 결과 통계 카드 (2×2 미니 카드 그리드)
+	var res_pc = PanelContainer.new()
+	res_pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 10))
+	lc.add_child(res_pc)
+	var rv = VBoxContainer.new(); rv.add_theme_constant_override("separation", 8)
+	res_pc.add_child(rv)
+	rv.add_child(_lbl("📊  오늘 거래 결과", C_TEXT3, 9))
 
-	# 생활비
-	var exp_card = _sc_card("💸 고정 생활비 지출", lc)
-	_sc_row(exp_card, "🍚 식비 (1일)", "-30,000원", C_DOWN)
+	var g1 = HBoxContainer.new(); g1.add_theme_constant_override("separation", 8); rv.add_child(g1)
+	sc_real_lbl   = _settle_stat_card(g1, "실현손익")
+	sc_unreal_lbl = _settle_stat_card(g1, "평가손익")
+	var g2 = HBoxContainer.new(); g2.add_theme_constant_override("separation", 8); rv.add_child(g2)
+	sc_cnt_lbl    = _settle_stat_card(g2, "거래 횟수")
+	sc_refund_lbl = _settle_stat_card(g2, "미체결 환불")
+
+	rv.add_child(_sep_h())
+	rv.add_child(_lbl("💸  고정 생활비", C_TEXT3, 9))
+
+	var food_hb = HBoxContainer.new()
+	var fk = _lbl("식비 (1일)", C_TEXT2, 11); fk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	food_hb.add_child(fk); food_hb.add_child(_lbl("-30,000원", C_DOWN, 11))
+	rv.add_child(food_hb)
+
 	rent_row_ctrl = HBoxContainer.new()
-	var rk = _lbl("🏠 월세", C_TEXT2, 11)
-	rk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rent_row_ctrl.add_child(rk)
-	rent_row_ctrl.add_child(_lbl("-500,000원", C_DOWN, 11))
-	rent_row_ctrl.visible = false
-	exp_card.add_child(rent_row_ctrl)
-	exp_card.add_child(_sep_h())
-	var exp_total_hb = HBoxContainer.new()
-	var ek = _lbl("합계", C_TEXT, 11)
-	ek.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	exp_total_hb.add_child(ek)
-	sc_exp_lbl = _lbl("-30,000원", C_DOWN, 11)
-	exp_total_hb.add_child(sc_exp_lbl)
-	exp_card.add_child(exp_total_hb)
+	var rk = _lbl("🏠 월세", C_TEXT2, 11); rk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rent_row_ctrl.add_child(rk); rent_row_ctrl.add_child(_lbl("-500,000원", C_DOWN, 11))
+	rent_row_ctrl.visible = false; rv.add_child(rent_row_ctrl)
+	rv.add_child(_sep_h())
 
-	# 알바
-	var work_card = _sc_card("💼 아르바이트 선택 (1일 1회)", lc)
-	wo_cv_btn    = _build_work_btn("🪛 편의점 알바",   "4시간 · 오후 파트타임", "+200,000원", func(): _do_work("cv",    200000))
-	wo_tutor_btn = _build_work_btn("📚 과외 알바",     "2시간 · 고수익",        "+350,000원", func(): _do_work("tutor", 350000))
-	wo_rest_btn  = _build_work_btn("😴 오늘은 쉬기",   "내일 컨디션 회복",      "없음 없음",  func(): _do_work("rest",  0))
-	work_card.add_child(wo_cv_btn)
-	work_card.add_child(wo_tutor_btn)
-	work_card.add_child(wo_rest_btn)
+	var exp_hb = HBoxContainer.new()
+	var ek = _lbl("합계", C_TEXT, 12); ek.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	exp_hb.add_child(ek)
+	sc_exp_lbl = _lbl("-", C_DOWN, 12); exp_hb.add_child(sc_exp_lbl)
+	rv.add_child(exp_hb)
 
-	# 오른쪽 컬럼
-	var rc = VBoxContainer.new()
-	rc.custom_minimum_size = Vector2(330, 0)
-	rc.add_theme_constant_override("separation", 11)
-	hb.add_child(rc)
+	# 보유 종목 카드
+	var hold_pc = PanelContainer.new()
+	hold_pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 10))
+	lc.add_child(hold_pc)
+	var hv = VBoxContainer.new(); hv.add_theme_constant_override("separation", 6); hold_pc.add_child(hv)
+	hv.add_child(_lbl("🏦  보유 종목 현황", C_TEXT3, 9))
+	s_holdings_vbox = VBoxContainer.new(); s_holdings_vbox.add_theme_constant_override("separation", 5)
+	hv.add_child(s_holdings_vbox)
 
-	# 총자산 카드
-	var total_card = PanelContainer.new()
-	total_card.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, Color(C_GOLD.r, C_GOLD.g, C_GOLD.b, 0.3), 10))
-	rc.add_child(total_card)
-	var tc_vb = VBoxContainer.new()
-	tc_vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	tc_vb.add_theme_constant_override("separation", 4)
-	total_card.add_child(tc_vb)
-	var tc_lbl = _lbl("오늘 최종 총자산", C_TEXT3, 9)
-	tc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tc_vb.add_child(tc_lbl)
+	# 거래 내역 로그 카드 (최근 5건)
+	var hist_pc = PanelContainer.new()
+	hist_pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 10))
+	lc.add_child(hist_pc)
+	var histv = VBoxContainer.new(); histv.add_theme_constant_override("separation", 4); hist_pc.add_child(histv)
+	histv.add_child(_lbl("📋  오늘 체결 내역 (최근 5건)", C_TEXT3, 9))
+	settle_hist_vbox = VBoxContainer.new(); settle_hist_vbox.add_theme_constant_override("separation", 3)
+	histv.add_child(settle_hist_vbox)
+
+	# 오른쪽 컬럼 (총자산 + 목표)
+	var rc_col = VBoxContainer.new()
+	rc_col.custom_minimum_size = Vector2(310, 0)
+	rc_col.add_theme_constant_override("separation", 10)
+	main_hb.add_child(rc_col)
+
+	var asset_pc = PanelContainer.new()
+	asset_pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, Color(C_GOLD.r,C_GOLD.g,C_GOLD.b,0.35), 10))
+	rc_col.add_child(asset_pc)
+	var av = VBoxContainer.new(); av.alignment = BoxContainer.ALIGNMENT_CENTER
+	av.add_theme_constant_override("separation", 7); asset_pc.add_child(av)
+	var at_lbl = _lbl("오늘 최종 총자산", C_TEXT3, 9)
+	at_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; av.add_child(at_lbl)
 	stc_val_lbl = _lbl("-", C_GOLD, 26)
-	stc_val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tc_vb.add_child(stc_val_lbl)
-	stc_chg_lbl = _lbl("-", C_TEXT, 11)
-	stc_chg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tc_vb.add_child(stc_chg_lbl)
+	stc_val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; av.add_child(stc_val_lbl)
+	stc_chg_lbl = _lbl("-", C_TEXT2, 11)
+	stc_chg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; av.add_child(stc_chg_lbl)
+	av.add_child(_sep_h())
 
 	var gpb_hb = HBoxContainer.new()
-	var gpb_k = _lbl("내집 목표 달성률", C_TEXT3, 10); gpb_k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var gpb_k = _lbl("내 집 목표 달성률", C_TEXT3, 10); gpb_k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gpb_hb.add_child(gpb_k)
-	gpb_pct_lbl = _lbl("0.0%", C_TEXT3, 10)
-	gpb_hb.add_child(gpb_pct_lbl)
-	tc_vb.add_child(gpb_hb)
-
+	gpb_pct_lbl = _lbl("0.0%", C_GOLD, 11); gpb_hb.add_child(gpb_pct_lbl); av.add_child(gpb_hb)
 	gpb_bar = ProgressBar.new()
-	gpb_bar.custom_minimum_size = Vector2(0, 7)
-	gpb_bar.max_value = 100; gpb_bar.value = 0
+	gpb_bar.custom_minimum_size = Vector2(0, 11); gpb_bar.max_value = 100; gpb_bar.value = 0
 	gpb_bar.show_percentage = false
-	gpb_bar.add_theme_stylebox_override("background", _sb(C_BORDER, 0, C_BORDER, 4))
-	gpb_bar.add_theme_stylebox_override("fill",       _sb(C_GOLD,   0, C_GOLD,   4))
-	tc_vb.add_child(gpb_bar)
+	gpb_bar.add_theme_stylebox_override("background", _sb(C_BORDER, 0, C_BORDER, 5))
+	gpb_bar.add_theme_stylebox_override("fill",       _sb(C_GOLD,   0, C_GOLD,   5))
+	av.add_child(gpb_bar)
 
-	# 보유 종목 현황
-	var hold_card = _sc_card("🏦 보유 종목 현황", rc)
-	hold_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	s_holdings_vbox = VBoxContainer.new()
-	hold_card.add_child(s_holdings_vbox)
+	# ── 3. 야간 활동 선택 카드 ────────────────────────────────
+	var work_outer = PanelContainer.new()
+	work_outer.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 10))
+	root.add_child(work_outer)
+	var wv = VBoxContainer.new(); wv.add_theme_constant_override("separation", 12); work_outer.add_child(wv)
 
-	# 다음 버튼
-	settle_act_ctrl = VBoxContainer.new()
-	settle_act_ctrl.visible = false
-	rc.add_child(settle_act_ctrl)
-	var next_btn = _btn("일간 해설 →", C_UP, Color.BLACK, 10)
-	next_btn.custom_minimum_size = Vector2(0, 44)
-	next_btn.add_theme_font_size_override("font_size", 14)
-	next_btn.pressed.connect(_go_night)
-	settle_act_ctrl.add_child(next_btn)
+	var wt_hb = HBoxContainer.new(); wv.add_child(wt_hb)
+	wt_hb.add_child(_lbl("🌙  야간 활동 선택", C_TEXT, 13))
+	var ws_lbl = _lbl("하나를 선택하면 다음 날로 진행할 수 있습니다", C_TEXT3, 10)
+	ws_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ws_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; wt_hb.add_child(ws_lbl)
+
+	var wc_hb = HBoxContainer.new(); wc_hb.add_theme_constant_override("separation", 10); wv.add_child(wc_hb)
+	settle_work_cards.clear()
+	var work_defs = [
+		{"type":"cv",    "pay":200000, "icon":"🪛", "name":"편의점 알바",
+		 "pay_str":"+200,000원", "time":"4시간 · 오후 파트타임",
+		 "fatigue":"중간", "risk":"없음", "next":"영향 없음", "col":C_BLUE},
+		{"type":"tutor", "pay":350000, "icon":"📚", "name":"과외 알바",
+		 "pay_str":"+350,000원", "time":"2시간 · 고수익",
+		 "fatigue":"높음", "risk":"없음", "next":"영향 없음", "col":C_GOLD},
+		{"type":"rest",  "pay":0,      "icon":"😴", "name":"오늘은 쉬기",
+		 "pay_str":"수입 없음",  "time":"내일 컨디션 회복",
+		 "fatigue":"없음", "risk":"없음", "next":"컨디션 +", "col":C_UP},
+	]
+	for wd: Dictionary in work_defs:
+		var card = _build_settle_work_card(wc_hb, wd)
+		settle_work_cards.append({"panel": card, "type": wd["type"], "pay": wd["pay"], "col": wd["col"]})
+
+	# ── 4. CTA 버튼 ───────────────────────────────────────────
+	settle_cta_btn = _btn("활동을 선택해주세요", C_BDR2, C_TEXT3, 10)
+	settle_cta_btn.custom_minimum_size = Vector2(0, 56)
+	settle_cta_btn.add_theme_font_size_override("font_size", 16)
+	settle_cta_btn.disabled = true
+	settle_cta_btn.pressed.connect(_confirm_settle)
+	root.add_child(settle_cta_btn)
 
 	return scr
+
+# ── 결산 통계 미니 카드 (라벨 반환) ──
+func _settle_stat_card(parent: HBoxContainer, label: String) -> Label:
+	var pc = PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.add_theme_stylebox_override("panel", _sb(C_PANEL, 1, C_BORDER, 8))
+	parent.add_child(pc)
+	var vb = VBoxContainer.new(); vb.add_theme_constant_override("separation", 3); pc.add_child(vb)
+	vb.add_child(_lbl(label, C_TEXT2, 9))
+	var val = _lbl("-", C_TEXT, 13)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	vb.add_child(val)
+	return val
+
+# ── 야간 활동 전략 카드 ──
+func _build_settle_work_card(parent: Control, wd: Dictionary) -> PanelContainer:
+	var card = PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", _sb(C_PANEL, 1, C_BDR2, 10))
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(card)
+
+	var vb = VBoxContainer.new(); vb.add_theme_constant_override("separation", 8); card.add_child(vb)
+
+	# 상단: 아이콘 + 이름 + 수입
+	var top = HBoxContainer.new(); top.add_theme_constant_override("separation", 8); vb.add_child(top)
+	top.add_child(_lbl(wd["icon"], C_TEXT, 26))
+	var nv = VBoxContainer.new(); nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nv.add_theme_constant_override("separation", 2); top.add_child(nv)
+	nv.add_child(_lbl(wd["name"], wd["col"], 12))
+	nv.add_child(_lbl(wd["time"], C_TEXT3, 10))
+	var pay_lbl = _lbl(wd["pay_str"], C_GOLD if wd["pay"] > 0 else C_TEXT3, 15)
+	top.add_child(pay_lbl)
+
+	vb.add_child(_sep_h())
+
+	# 하단: 태그 3개
+	var tags = HBoxContainer.new(); tags.add_theme_constant_override("separation", 4); vb.add_child(tags)
+	for ti: Array in [["피로도", wd["fatigue"]], ["리스크", wd["risk"]], ["다음날", wd["next"]]]:
+		var tv = VBoxContainer.new(); tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tv.add_theme_constant_override("separation", 2); tags.add_child(tv)
+		tv.add_child(_lbl(ti[0], C_TEXT3, 9))
+		tv.add_child(_lbl(ti[1], C_TEXT2, 10))
+
+	var type_c: String = wd["type"]; var pay_c: int = wd["pay"]
+	card.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
+			if not G["workDone"]: _select_work(type_c, pay_c)
+	)
+	return card
 
 func _sc_card(title: String, parent: VBoxContainer) -> VBoxContainer:
 	var pc = PanelContainer.new()
@@ -1061,57 +1219,282 @@ func _build_night(parent: Control) -> Control:
 	var scr = Control.new()
 	scr.set_anchors_preset(Control.PRESET_FULL_RECT)
 	parent.add_child(scr)
-	var bg = ColorRect.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); bg.color = C_BG
+
+	var bg = ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color("#07090f")
 	scr.add_child(bg)
 
-	var night_cc = CenterContainer.new()
-	night_cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	scr.add_child(night_cc)
+	# 스크롤 루트
+	var scroll = ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scr.add_child(scroll)
 
-	var center = VBoxContainer.new()
-	center.custom_minimum_size = Vector2(400, 0)
-	center.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_theme_constant_override("separation", 12)
-	night_cc.add_child(center)
+	var margin = MarginContainer.new()
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["margin_left","margin_right","margin_top","margin_bottom"]:
+		margin.add_theme_constant_override(side, 24)
+	scroll.add_child(margin)
 
-	center.add_child(_lbl("🌙", C_TEXT, 28))
-	var clock = _lbl("23:00", C_PURPLE, 50)
-	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center.add_child(clock)
-	var night_sub = _lbl("일간 · 하루가 끝났습니다", C_TEXT3, 11)
-	night_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center.add_child(night_sub)
-	night_msg_lbl = _lbl("오늘도 수고했어요", C_TEXT, 14)
+	var root_vb = VBoxContainer.new()
+	root_vb.add_theme_constant_override("separation", 14)
+	margin.add_child(root_vb)
+
+	# ── 1. 헤더 ──────────────────────────────
+	var hdr = VBoxContainer.new()
+	hdr.add_theme_constant_override("separation", 5)
+	root_vb.add_child(hdr)
+
+	n_day_lbl = _lbl("DAY 1 종료", C_TEXT3, 11)
+	n_day_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hdr.add_child(n_day_lbl)
+
+	var title_lbl = _lbl("하루 결산", C_TEXT, 30)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hdr.add_child(title_lbl)
+
+	night_msg_lbl = _lbl("오늘도 수고했어요", C_TEXT2, 12)
 	night_msg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center.add_child(night_msg_lbl)
+	hdr.add_child(night_msg_lbl)
 
-	# 요약 카드
-	var summary = PanelContainer.new()
-	summary.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 12))
-	summary.custom_minimum_size = Vector2(340, 0)
-	center.add_child(summary)
-	var sv = VBoxContainer.new()
-	sv.add_theme_constant_override("separation", 4)
-	summary.add_child(sv)
-	sv.add_child(_lbl("📋 DAY 결산 요약", C_TEXT3, 9))
-	n_day_lbl   = _sc_row(sv, "날짜",      "Day 1")
-	n_total_lbl = _sc_row(sv, "총자산",    "-",  C_GOLD)
-	n_pnl_lbl   = _sc_row(sv, "오늘 수익", "-")
-	n_work_lbl  = _sc_row(sv, "알바 수입", "-")
-	n_exp_lbl   = _sc_row(sv, "생활비 지출","-", C_DOWN)
-	n_goal_lbl  = _sc_row(sv, "달성률",    "-",  C_GOLD)
+	# ── 2. 핵심 요약 카드 3열 ────────────────
+	var cards_hb = HBoxContainer.new()
+	cards_hb.add_theme_constant_override("separation", 10)
+	root_vb.add_child(cards_hb)
 
-	var morn_hb = HBoxContainer.new()
-	morn_hb.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(morn_hb)
-	n_nextday_lbl = _lbl("2", C_TEXT, 14)
-	var morn_btn_txt_pre = _lbl("☀ 다음 날 시작 (Day ", C_TEXT, 14)
-	var morn_btn = _btn("☀ 다음 날 시작", C_GOLD, Color.BLACK, 10)
-	morn_btn.custom_minimum_size = Vector2(260, 44)
-	morn_btn.add_theme_font_size_override("font_size", 14)
+	# 총자산
+	var tc = _night_card(cards_hb, Color(C_GOLD.r, C_GOLD.g, C_GOLD.b, 0.25))
+	tc[0].add_child(_lbl("총자산", C_TEXT3, 9))
+	n_total_lbl = _lbl("-", C_GOLD, 17)
+	n_total_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	n_total_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tc[0].add_child(n_total_lbl)
+
+	# 오늘 수익
+	var pc = _night_card(cards_hb, C_BDR2)
+	pc[0].add_child(_lbl("오늘 수익", C_TEXT3, 9))
+	n_pnl_lbl = _lbl("-", C_TEXT, 15)
+	n_pnl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pc[0].add_child(n_pnl_lbl)
+	n_pnl_pct_lbl = _lbl("-", C_TEXT2, 11)
+	n_pnl_pct_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pc[0].add_child(n_pnl_pct_lbl)
+
+	# 거래 횟수
+	var cc = _night_card(cards_hb, C_BDR2)
+	cc[0].add_child(_lbl("거래 횟수", C_TEXT3, 9))
+	n_cnt_lbl = _lbl("0회", C_TEXT, 22)
+	n_cnt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cc[0].add_child(n_cnt_lbl)
+
+	# ── 3. 목표 진행률 ───────────────────────
+	var goal_pc = PanelContainer.new()
+	goal_pc.add_theme_stylebox_override("panel",
+		_sb(C_PANEL2, 1, Color(C_GOLD.r, C_GOLD.g, C_GOLD.b, 0.3), 12))
+	root_vb.add_child(goal_pc)
+	var gv = VBoxContainer.new()
+	gv.add_theme_constant_override("separation", 8)
+	goal_pc.add_child(gv)
+
+	var goal_row = HBoxContainer.new()
+	gv.add_child(goal_row)
+	var gtitle = _lbl("내 집 마련 진행률", C_GOLD, 11)
+	gtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	goal_row.add_child(gtitle)
+	n_goal_lbl = _lbl("0.0%", C_GOLD, 14)
+	goal_row.add_child(n_goal_lbl)
+
+	n_goal_bar = ProgressBar.new()
+	n_goal_bar.custom_minimum_size = Vector2(0, 14)
+	n_goal_bar.max_value = 100; n_goal_bar.value = 0
+	n_goal_bar.show_percentage = false
+	n_goal_bar.add_theme_stylebox_override("background", _sb(C_BDR2, 0, C_BDR2, 7))
+	n_goal_bar.add_theme_stylebox_override("fill",       _sb(C_GOLD, 0, C_GOLD, 7))
+	gv.add_child(n_goal_bar)
+
+	n_goal_remain_lbl = _lbl("목표까지 -원", C_TEXT3, 10)
+	n_goal_remain_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	gv.add_child(n_goal_remain_lbl)
+
+	# ── 4. 상세 내역 2열 ─────────────────────
+	var detail_hb = HBoxContainer.new()
+	detail_hb.add_theme_constant_override("separation", 10)
+	root_vb.add_child(detail_hb)
+
+	# 거래 결과 요약
+	var trade_pc = PanelContainer.new()
+	trade_pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	trade_pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 10))
+	detail_hb.add_child(trade_pc)
+	var tv = VBoxContainer.new(); tv.add_theme_constant_override("separation", 5)
+	trade_pc.add_child(tv)
+	tv.add_child(_lbl("거래 결과 요약", C_TEXT3, 9))
+	n_trade_sum_lbl = _lbl("-", C_TEXT2, 11)
+	n_trade_sum_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tv.add_child(n_trade_sum_lbl)
+	tv.add_child(_sep_h())
+	n_real_pnl_lbl = _lbl("실현손익 -", C_TEXT2, 11)
+	tv.add_child(n_real_pnl_lbl)
+
+	# 생활비 내역
+	var exp_pc = PanelContainer.new()
+	exp_pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	exp_pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, C_BDR2, 10))
+	detail_hb.add_child(exp_pc)
+	var ev = VBoxContainer.new(); ev.add_theme_constant_override("separation", 5)
+	exp_pc.add_child(ev)
+	ev.add_child(_lbl("생활비 내역", C_TEXT3, 9))
+	n_exp_lbl = _lbl("-", C_DOWN, 11)
+	ev.add_child(n_exp_lbl)
+	n_work_lbl = _lbl("-", C_TEXT2, 11)
+	ev.add_child(n_work_lbl)
+
+	# ── 5. 하단 버튼 ─────────────────────────
+	var save_btn = _btn("💾 저장하기", C_PANEL2, C_TEXT2, 8)
+	save_btn.custom_minimum_size = Vector2(0, 34)
+	save_btn.pressed.connect(_save_game)
+	root_vb.add_child(save_btn)
+
+	var morn_btn = _btn("☀  다음 날 진행  →", C_GOLD, Color.BLACK, 10)
+	morn_btn.custom_minimum_size = Vector2(0, 56)
+	morn_btn.add_theme_font_size_override("font_size", 18)
 	morn_btn.pressed.connect(_go_morning)
-	center.add_child(morn_btn)
+	root_vb.add_child(morn_btn)
 
+	return scr
+
+# 카드 PanelContainer + 내부 VBoxContainer 반환 헬퍼
+func _night_card(parent: Control, border_col: Color) -> Array:
+	var pc = PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, border_col, 10))
+	parent.add_child(pc)
+	var vb = VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 4)
+	pc.add_child(vb)
+	return [vb]
+
+# ═══════════════════════════════════
+# 게임오버 화면
+# ═══════════════════════════════════
+func _build_gameover(parent: Control) -> Control:
+	var scr = Control.new()
+	scr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(scr)
+	var bg = ColorRect.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color("#0d0608"); scr.add_child(bg)
+
+	var cc = CenterContainer.new(); cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scr.add_child(cc)
+	var vb = VBoxContainer.new()
+	vb.custom_minimum_size = Vector2(400, 0)
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 16)
+	cc.add_child(vb)
+
+	var icon = _lbl("💸", C_TEXT, 56); icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(icon)
+	var title = _lbl("파산", C_DOWN, 42); title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(title)
+	var sub = _lbl("생활비를 감당하지 못했습니다.\n내 집 마련의 꿈이 무너졌습니다.", C_TEXT2, 13)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(sub)
+
+	var card = PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, Color(C_DOWN.r,C_DOWN.g,C_DOWN.b,0.3), 12))
+	card.custom_minimum_size = Vector2(360, 0)
+	vb.add_child(card)
+	var cv = VBoxContainer.new(); cv.add_theme_constant_override("separation", 6); card.add_child(cv)
+	cv.add_child(_lbl("최종 기록", C_TEXT3, 9))
+	var go_day_lbl   = _sc_row(cv, "생존 일수", "-")
+	var go_total_lbl = _sc_row(cv, "최종 총자산", "-", C_DOWN)
+	var go_trade_lbl = _sc_row(cv, "총 거래 횟수", "-")
+
+	var retry_btn = _btn("다시 도전하기", C_DOWN, Color.WHITE, 10)
+	retry_btn.custom_minimum_size = Vector2(280, 48)
+	retry_btn.add_theme_font_size_override("font_size", 14)
+	retry_btn.pressed.connect(func():
+		go_day_lbl.text   = "%d일" % (G["day"] as int)
+		go_total_lbl.text = fmt(_get_total_asset()) + "원"
+		go_trade_lbl.text = "%d회" % (G["tradeCount"] as int)
+		_on_start_game()
+	)
+	vb.add_child(retry_btn)
+
+	var menu_btn = _btn("메인 메뉴", C_PANEL2, C_TEXT2, 10)
+	menu_btn.custom_minimum_size = Vector2(280, 36)
+	menu_btn.pressed.connect(func(): show_screen("menu"))
+	vb.add_child(menu_btn)
+
+	# 표시 시 라벨 업데이트
+	scr.visibility_changed.connect(func():
+		if scr.visible:
+			go_day_lbl.text   = "%d일" % (G["day"] as int)
+			go_total_lbl.text = fmt(_get_total_asset()) + "원"
+			go_trade_lbl.text = "%d회" % (G["tradeCount"] as int)
+	)
+	return scr
+
+# ═══════════════════════════════════
+# 승리 화면
+# ═══════════════════════════════════
+func _build_victory(parent: Control) -> Control:
+	var scr = Control.new()
+	scr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(scr)
+	var bg = ColorRect.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color("#050d08"); scr.add_child(bg)
+
+	var cc = CenterContainer.new(); cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scr.add_child(cc)
+	var vb = VBoxContainer.new()
+	vb.custom_minimum_size = Vector2(420, 0)
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 16)
+	cc.add_child(vb)
+
+	var icon = _lbl("🏠", C_TEXT, 56); icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(icon)
+	var title = _lbl("내 집 마련 성공!", C_GOLD, 36); title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(title)
+	var sub = _lbl("목표 자산 5,500만원을 달성했습니다!\n드디어 내 집을 마련했어요.", C_TEXT2, 13)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(sub)
+
+	var card = PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _sb(C_PANEL2, 1, Color(C_GOLD.r,C_GOLD.g,C_GOLD.b,0.3), 12))
+	card.custom_minimum_size = Vector2(380, 0)
+	vb.add_child(card)
+	var cv = VBoxContainer.new(); cv.add_theme_constant_override("separation", 6); card.add_child(cv)
+	cv.add_child(_lbl("클리어 기록", C_TEXT3, 9))
+	var vc_day_lbl   = _sc_row(cv, "클리어 일수", "-", C_GOLD)
+	var vc_total_lbl = _sc_row(cv, "최종 총자산", "-", C_UP)
+	var vc_trade_lbl = _sc_row(cv, "총 거래 횟수", "-")
+	var vc_goal_lbl  = _sc_row(cv, "목표 달성률", "-", C_GOLD)
+
+	var retry_btn = _btn("다시 도전하기", C_GOLD, Color.BLACK, 10)
+	retry_btn.custom_minimum_size = Vector2(280, 48)
+	retry_btn.add_theme_font_size_override("font_size", 14)
+	retry_btn.pressed.connect(func(): _on_start_game())
+	vb.add_child(retry_btn)
+
+	var menu_btn = _btn("메인 메뉴", C_PANEL2, C_TEXT2, 10)
+	menu_btn.custom_minimum_size = Vector2(280, 36)
+	menu_btn.pressed.connect(func(): show_screen("menu"))
+	vb.add_child(menu_btn)
+
+	scr.visibility_changed.connect(func():
+		if scr.visible:
+			var total := _get_total_asset()
+			vc_day_lbl.text   = "%d일" % (G["day"] as int)
+			vc_total_lbl.text = fmt(total) + "원"
+			vc_trade_lbl.text = "%d회" % (G["tradeCount"] as int)
+			vc_goal_lbl.text  = "%.1f%%" % _get_goal_pct()
+	)
 	return scr
 
 # ── 토스트 ──
@@ -1261,10 +1644,9 @@ func _open_modal(is_buy: bool):
 	modal_is_buy = is_buy
 	var idx: int = G["curStock"] as int
 	var p: int   = prices[idx]
-	var port: Dictionary = G["portfolio"].get(idx, {})
-	var held: int = port.get("qty", 0) as int
-	var cash: int = G["cash"] as int
-	var avail_buy: int = cash / max(p, 1)
+	var holding := PortfolioManager.get_holding(_ticker(idx))
+	var held: int = int(holding["quantity"])
+	var avail_buy: int = PortfolioManager.cash / max(p, 1)
 
 	modal_title_lbl.text = ("▲ 매수 주문" if is_buy else "▼ 매도 주문")
 	modal_title_lbl.add_theme_color_override("font_color", C_DOWN if is_buy else C_BLUE)
@@ -1272,6 +1654,7 @@ func _open_modal(is_buy: bool):
 	modal_price_lbl.text   = fmt(p) + "원"
 	modal_holding_lbl.text = "보유 %d주" % held
 	modal_avail_lbl.text   = ("매수가능 %d주" if is_buy else "매도가능 %d주") % (avail_buy if is_buy else held)
+
 	modal_confirm_btn.text = "매수 확정" if is_buy else "매도 확정"
 	modal_confirm_btn.add_theme_stylebox_override("normal",  _sb(C_DOWN if is_buy else C_BLUE, 0, C_DOWN, 10))
 	modal_confirm_btn.add_theme_stylebox_override("hover",   _sb((C_DOWN if is_buy else C_BLUE).lightened(0.1), 0, C_DOWN, 10))
@@ -1300,7 +1683,7 @@ func _update_modal_sum():
 	var qty: int = inp_qty.text.to_int()
 	var unit_p: int = (inp_lmt.text.to_int() if inp_lmt.text.length() > 0 else prices[idx]) if order_mode == "lmt" else prices[idx]
 	var total: int  = qty * unit_p
-	var after: int  = (G["cash"] as int) - (total if modal_is_buy else -total)
+	var after: int  = PortfolioManager.cash - (total if modal_is_buy else -total)
 	modal_detail_unit.text  = fmt(unit_p) + "원"
 	modal_detail_qty.text   = ("%d주" % qty) if qty > 0 else "-"
 	modal_detail_total.text = (fmt(total) + "원") if qty > 0 else "-"
@@ -1311,11 +1694,15 @@ func _update_modal_sum():
 # 화면 전환
 # ═══════════════════════════════════
 func show_screen(name: String):
-	scr_menu.visible    = (name == "menu")
-	scr_morning.visible = (name == "morning")
-	scr_trade.visible   = (name == "trade")
-	scr_settle.visible  = (name == "settle")
-	scr_night.visible   = (name == "night")
+	if name in ["gameover", "victory"]:
+		trade_tmr.stop()
+	scr_menu.visible     = (name == "menu")
+	scr_morning.visible  = (name == "morning")
+	scr_trade.visible    = (name == "trade")
+	scr_settle.visible   = (name == "settle")
+	scr_night.visible    = (name == "night")
+	scr_gameover.visible = (name == "gameover")
+	scr_victory.visible  = (name == "victory")
 
 # ═══════════════════════════════════
 # HUD 업데이트
@@ -1324,7 +1711,7 @@ func _update_hud():
 	var total: int  = _get_total_asset()
 	var pct: float  = _get_goal_pct()
 	hud_day_v.text   = str(G["day"] as int)
-	hud_cash_v.text  = fmt(G["cash"] as int)
+	hud_cash_v.text  = fmt(PortfolioManager.cash)
 	hud_total_v.text = fmt(total)
 	hud_rent_v.text  = "D-%d" % (G["rentDue"] as int)
 	hud_goal_bar.value = pct
@@ -1337,11 +1724,15 @@ func _update_hud():
 # PHASE A – 아침
 # ═══════════════════════════════════
 func _on_start_game():
-	G["day"] = 1; G["cash"] = 10000000; G["startCash"] = 10000000
-	G["portfolio"] = {}; G["pendingOrders"] = []
+	G["day"] = 1; G["startCash"] = 10000000
 	G["todayPnl"] = 0; G["realPnl"] = 0; G["tradeCount"] = 0
 	G["workDone"] = false; G["workIncome"] = 0; G["rentDue"] = 30
 	G["newsSelected"] = ""; G["curStock"] = 0; G["tickIdx"] = 0
+	trade_history.clear()
+	PortfolioManager.reset_portfolio()
+	GameManager.current_day = 1
+	GameManager.is_game_over = false
+	GameManager.is_victory = false
 	for i in STOCKS.size():
 		prices[i] = STOCKS[i]["base"]
 		all_hist[i] = [STOCKS[i]["base"]]
@@ -1424,6 +1815,9 @@ func _go_trade():
 		prices[i] = STOCKS[i]["base"]
 		all_hist[i] = [STOCKS[i]["base"]]
 		volumes[i] = 0
+		var sname: String = STOCKS[i]["name"] as String
+		if MarketManager.stocks.has(sname):
+			MarketManager.stocks[sname]["price"] = prices[i]
 	G["curStock"] = 0
 	show_screen("trade")
 	_update_hud()
@@ -1454,6 +1848,10 @@ func _tick_market():
 		prices[i] = max(100, roundi(prices[i] * (1.0 + bias + noise)))
 		all_hist[i].append(prices[i])
 		volumes[i] = (volumes[i] as int) + randi_range(80, 600)
+		# MarketManager에 가격 동기화 → PortfolioManager.get_total_value()가 올바른 가격 사용
+		var sname: String = STOCKS[i]["name"] as String
+		if MarketManager.stocks.has(sname):
+			MarketManager.stocks[sname]["price"] = prices[i]
 	_check_pending()
 
 func _update_stats():
@@ -1506,17 +1904,56 @@ func _draw_chart():
 	var mn := float(hist[0]); var mx := float(hist[0])
 	for p in hist:
 		mn = min(mn, float(p)); mx = max(mx, float(p))
+	# 범위가 너무 좁으면 최소 ±0.5% 확보
+	if mx - mn < float(hist[0]) * 0.005:
+		var margin := float(hist[0]) * 0.003
+		mn -= margin; mx += margin
 	var rng := mx - mn
 	if rng == 0.0: rng = 1.0
 
-	chart_line.clear_points()
 	var is_up: bool = hist[-1] >= hist[0]
-	chart_line.default_color = C_UP if is_up else C_DOWN
 
+	# ── 기준가(시가) 수평 라인 ──
+	chart_base_line.clear_points()
+	var base_y := H - pad - ((float(hist[0]) - mn) / rng) * (H - pad * 2.0)
+	chart_base_line.add_point(Vector2(0.0, base_y))
+	chart_base_line.add_point(Vector2(W,   base_y))
+
+	# ── 주가 라인 ──
+	chart_line.clear_points()
+	chart_line.default_color = C_UP if is_up else C_DOWN
 	for i in hist.size():
 		var x: float = (float(i) / MAX_TICK) * W
 		var y: float = H - pad - ((float(hist[i]) - mn) / rng) * (H - pad * 2.0)
 		chart_line.add_point(Vector2(x, y))
+
+	# ── MA5 이동평균 ──
+	chart_ma5_line.clear_points()
+	if hist.size() >= 5:
+		for i in range(4, hist.size()):
+			var sum5 := 0.0
+			for j in range(i - 4, i + 1): sum5 += float(hist[j])
+			var ma5 := sum5 / 5.0
+			var x := (float(i) / MAX_TICK) * W
+			var y := H - pad - ((ma5 - mn) / rng) * (H - pad * 2.0)
+			chart_ma5_line.add_point(Vector2(x, y))
+
+	# ── Y축 가격 라벨 ──
+	chart_y_max_lbl.text = fmt(int(mx))
+	chart_y_max_lbl.position = Vector2(4.0, 2.0)
+
+	chart_y_mid_lbl.text = fmt(int((mx + mn) / 2.0))
+	chart_y_mid_lbl.position = Vector2(4.0, H / 2.0 - 7.0)
+
+	chart_y_min_lbl.text = fmt(int(mn))
+	chart_y_min_lbl.position = Vector2(4.0, H - 14.0)
+
+	# ── 현재가 우측 라벨 ──
+	var cur_price: int = int(hist[-1])
+	var cur_y := H - pad - ((float(cur_price) - mn) / rng) * (H - pad * 2.0)
+	chart_cur_lbl.text = fmt(cur_price)
+	chart_cur_lbl.add_theme_color_override("font_color", C_UP if is_up else C_DOWN)
+	chart_cur_lbl.position = Vector2(W - 58.0, clampf(cur_y - 7.0, 0.0, H - 14.0))
 
 func _render_watchlist():
 	for i in wl_items.size():
@@ -1554,12 +1991,15 @@ func _update_right_panel():
 	r_stk_title_lbl.text = STOCKS[idx]["name"]
 	r_price_lbl.text = fmt(p) + "원"
 
-	var port: Dictionary = G["portfolio"].get(idx, {})
-	if not port.is_empty() and port.get("qty", 0) > 0:
-		var pnl: int   = (p - (port["avgPrice"] as int)) * (port["qty"] as int)
-		var rate: float = (float(p) - (port["avgPrice"] as float)) / (port["avgPrice"] as float) * 100.0
-		r_qty_lbl.text = fmt(port["qty"] as int) + "주"
-		r_avg_lbl.text = fmt(port["avgPrice"] as int) + "원"
+	var ticker := _ticker(idx)
+	var holding := PortfolioManager.get_holding(ticker)
+	var held_qty: int = int(holding["quantity"])
+	if held_qty > 0:
+		var avg_p: float = float(holding["avg_price"])
+		var pnl: int = (p - int(avg_p)) * held_qty
+		var rate: float = (float(p) - avg_p) / max(avg_p, 1.0) * 100.0
+		r_qty_lbl.text = fmt(held_qty) + "주"
+		r_avg_lbl.text = fmt(int(avg_p)) + "원"
 		r_stk_pnl_lbl.text = ("%s%s원" % ["+" if pnl >= 0 else "", fmt(pnl)])
 		r_stk_pnl_lbl.add_theme_color_override("font_color", C_UP if pnl >= 0 else C_DOWN)
 		r_rate_lbl.text = ("%s%.2f%%" % ["+" if rate >= 0 else "", rate])
@@ -1570,9 +2010,11 @@ func _update_right_panel():
 
 	var total: int = _get_total_asset()
 	var eval_amt: int = 0
-	for k in G["portfolio"]:
-		eval_amt += prices[k] * (G["portfolio"][k].get("qty", 0) as int)
-	r_cash_lbl.text  = fmt(G["cash"] as int) + "원"
+	for tkr in PortfolioManager.holdings:
+		var h_idx := _idx_for_ticker(tkr)
+		if h_idx >= 0:
+			eval_amt += prices[h_idx] * int(PortfolioManager.holdings[tkr]["quantity"])
+	r_cash_lbl.text  = fmt(PortfolioManager.cash) + "원"
 	r_eval_lbl.text  = fmt(eval_amt) + "원"
 	r_total_lbl.text = fmt(total) + "원"
 	r_total_lbl.add_theme_color_override("font_color", C_GOLD)
@@ -1585,21 +2027,23 @@ func _render_portfolio():
 	for c in port_list_vbox.get_children():
 		c.queue_free()
 	var held := []
-	for k in G["portfolio"]:
-		if G["portfolio"][k].get("qty", 0) > 0:
-			held.append(k)
+	for tkr in PortfolioManager.holdings:
+		if int(PortfolioManager.holdings[tkr]["quantity"]) > 0:
+			held.append(tkr)
 	if held.is_empty():
 		var empty = _lbl("보유 종목 없음", C_TEXT3, 11)
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		port_list_vbox.add_child(empty)
 		return
-	for k in held:
-		var port: Dictionary = G["portfolio"][k]
+	for tkr in held:
+		var h: Dictionary = PortfolioManager.holdings[tkr]
+		var k: int = _idx_for_ticker(tkr)
+		if k < 0: continue
 		var cur: int   = prices[k]
-		var avg: int   = port["avgPrice"] as int
-		var qty: int   = port["qty"] as int
+		var avg: int   = int(h["avg_price"])
+		var qty: int   = int(h["quantity"])
 		var pnl: int   = (cur - avg) * qty
-		var rate: float = (float(cur) - avg) / float(avg) * 100.0
+		var rate: float = (float(cur) - avg) / float(max(avg, 1)) * 100.0
 		# 한국 주식: 수익=빨강(C_DOWN=#ef4444), 손실=파랑(C_BLUE=#3b82f6)
 		var profit_col: Color = C_DOWN if pnl >= 0 else C_BLUE
 		var profit_bg: Color  = Color(C_DOWN.r, C_DOWN.g, C_DOWN.b, 0.08) if pnl >= 0 else Color(C_BLUE.r, C_BLUE.g, C_BLUE.b, 0.08)
@@ -1680,16 +2124,17 @@ func _do_buy():
 	var qty: int = inp_qty.text.to_int()
 	if qty <= 0: _toast("수량을 입력해주세요", "warn"); return
 	var idx: int = G["curStock"] as int
-	var price: int = (inp_lmt.text.to_int() if inp_lmt.text.length() > 0 else 0) if order_mode == "lmt" else prices[idx]
-	if order_mode == "lmt" and price <= 0: _toast("지정가를 입력해주세요", "warn"); return
-	if order_mode == "mkt": price = prices[idx]
-	var total: int = qty * price
-	if (G["cash"] as int) < total: _toast("현금 부족 (필요: %s원)" % fmt(total), "err"); return
-	G["cash"] = (G["cash"] as int) - total
+	var price: int = prices[idx]
 	if order_mode == "lmt":
-		G["pendingOrders"].append({"type": "buy", "idx": idx, "price": price, "qty": qty})
+		price = inp_lmt.text.to_int() if inp_lmt.text.length() > 0 else 0
+		if price <= 0: _toast("지정가를 입력해주세요", "warn"); return
+	var total: int = qty * price
+	if PortfolioManager.cash < total: _toast("현금 부족 (필요: %s원)" % fmt(total), "err"); return
+	if order_mode == "lmt":
+		PortfolioManager.buy_limit(_ticker(idx), qty, price)  # 내부에서 cash 차감
 		_toast("지정가 매수 등록 · %s %d주 @ %s원" % [STOCKS[idx]["name"], qty, fmt(price)], "ok")
 	else:
+		PortfolioManager.cash -= total
 		_apply_buy(idx, qty, price); G["tradeCount"] += 1
 		_toast("시장가 매수 · %s %d주 @ %s원" % [STOCKS[idx]["name"], qty, fmt(price)], "ok")
 	inp_qty.text = ""; inp_lmt.text = ""
@@ -1700,13 +2145,15 @@ func _do_sell():
 	var qty: int = inp_qty.text.to_int()
 	if qty <= 0: _toast("수량을 입력해주세요", "warn"); return
 	var idx: int = G["curStock"] as int
-	var port: Dictionary = G["portfolio"].get(idx, {})
-	if port.is_empty() or port.get("qty", 0) < qty: _toast("보유 수량 부족", "err"); return
-	var price: int = (inp_lmt.text.to_int() if inp_lmt.text.length() > 0 else 0) if order_mode == "lmt" else prices[idx]
-	if order_mode == "lmt" and price <= 0: _toast("지정가를 입력해주세요", "warn"); return
-	if order_mode == "mkt": price = prices[idx]
+	var ticker := _ticker(idx)
+	var holding := PortfolioManager.get_holding(ticker)
+	if int(holding["quantity"]) < qty: _toast("보유 수량 부족", "err"); return
+	var price: int = prices[idx]
 	if order_mode == "lmt":
-		G["pendingOrders"].append({"type": "sell", "idx": idx, "price": price, "qty": qty})
+		price = inp_lmt.text.to_int() if inp_lmt.text.length() > 0 else 0
+		if price <= 0: _toast("지정가를 입력해주세요", "warn"); return
+	if order_mode == "lmt":
+		PortfolioManager.sell_limit(ticker, qty, price)
 		_toast("지정가 매도 등록 · %s %d주 @ %s원" % [STOCKS[idx]["name"], qty, fmt(price)], "ok")
 	else:
 		_apply_sell(idx, qty, price); G["tradeCount"] += 1
@@ -1716,68 +2163,85 @@ func _do_sell():
 	_update_right_panel(); _render_portfolio(); _render_pending(); _update_hud()
 
 func _apply_buy(idx: int, qty: int, price: int):
-	if not G["portfolio"].has(idx):
-		G["portfolio"][idx] = {"qty": 0, "avgPrice": 0}
-	var p: Dictionary = G["portfolio"][idx]
-	p["avgPrice"] = roundi(((p["avgPrice"] as int) * (p["qty"] as int) + price * qty) / float((p["qty"] as int) + qty))
-	p["qty"] = (p["qty"] as int) + qty
+	var ticker := _ticker(idx)
+	if not PortfolioManager.holdings.has(ticker):
+		PortfolioManager.holdings[ticker] = {"quantity": 0, "avg_price": 0.0}
+	var h: Dictionary = PortfolioManager.holdings[ticker]
+	var old_qty: int = int(h["quantity"])
+	var old_avg: float = float(h["avg_price"])
+	var new_qty: int = old_qty + qty
+	h["avg_price"] = float(old_qty * old_avg + qty * price) / max(new_qty, 1)
+	h["quantity"] = new_qty
+	trade_history.append({
+		"day": G["day"], "type": "buy", "name": STOCKS[idx]["name"],
+		"qty": qty, "price": price, "total": qty * price, "pnl": 0
+	})
 
 func _apply_sell(idx: int, qty: int, price: int):
-	var p: Dictionary = G["portfolio"][idx]
+	var ticker := _ticker(idx)
+	var h: Dictionary = PortfolioManager.holdings[ticker]
+	var avg: int = int(h["avg_price"])
 	var gain: int = price * qty
-	var cost: int = (p["avgPrice"] as int) * qty
-	G["cash"] = (G["cash"] as int) + gain
-	G["realPnl"] = (G["realPnl"] as int) + gain - cost
-	G["todayPnl"] = (G["todayPnl"] as int) + gain - cost
-	p["qty"] = (p["qty"] as int) - qty
-	if (p["qty"] as int) <= 0:
-		G["portfolio"].erase(idx)
+	var pnl: int = gain - avg * qty
+	PortfolioManager.cash += gain
+	G["realPnl"] = (G["realPnl"] as int) + pnl
+	G["todayPnl"] = (G["todayPnl"] as int) + pnl
+	h["quantity"] = int(h["quantity"]) - qty
+	if int(h["quantity"]) <= 0:
+		PortfolioManager.holdings.erase(ticker)
+	trade_history.append({
+		"day": G["day"], "type": "sell", "name": STOCKS[idx]["name"],
+		"qty": qty, "price": price, "total": gain, "pnl": pnl
+	})
 
 func _check_pending():
 	var remain: Array = []
-	for o: Dictionary in G["pendingOrders"]:
-		var cur: int = prices[o["idx"] as int]
-		if o["type"] == "buy" and cur <= (o["price"] as int):
-			_apply_buy(o["idx"] as int, o["qty"] as int, o["price"] as int)
+	for o: Dictionary in PortfolioManager.pending_orders:
+		var ticker: String = str(o["stock_code"])
+		var idx: int = _idx_for_ticker(ticker)
+		if idx < 0: remain.append(o); continue
+		var cur: int = prices[idx]
+		if o["type"] == "buy" and cur <= int(o["price"]):
+			# 현금은 주문 시 이미 차감됨 → holdings만 업데이트
+			_apply_buy(idx, int(o["quantity"]), int(o["price"]))
 			G["tradeCount"] = (G["tradeCount"] as int) + 1
-			_toast("지정가 매수 체결 · %s %d주" % [STOCKS[o["idx"] as int]["name"] as String, o["qty"] as int], "ok")
-		elif o["type"] == "sell" and cur >= (o["price"] as int):
-			var port: Dictionary = G["portfolio"].get(o["idx"] as int, {})
-			if not port.is_empty() and (port.get("qty", 0) as int) >= (o["qty"] as int):
-				_apply_sell(o["idx"] as int, o["qty"] as int, o["price"] as int)
+			_toast("지정가 매수 체결 · %s %d주" % [STOCKS[idx]["name"], int(o["quantity"])], "ok")
+		elif o["type"] == "sell" and cur >= int(o["price"]):
+			var h := PortfolioManager.get_holding(ticker)
+			if int(h["quantity"]) >= int(o["quantity"]):
+				_apply_sell(idx, int(o["quantity"]), int(o["price"]))
 				G["tradeCount"] = (G["tradeCount"] as int) + 1
-				_toast("지정가 매도 체결 · %s %d주" % [STOCKS[o["idx"] as int]["name"] as String, o["qty"] as int], "ok")
+				_toast("지정가 매도 체결 · %s %d주" % [STOCKS[idx]["name"], int(o["quantity"])], "ok")
 			else:
 				remain.append(o)
 		else:
 			remain.append(o)
-	if G["pendingOrders"].size() != remain.size():
-		G["pendingOrders"] = remain
+	if PortfolioManager.pending_orders.size() != remain.size():
+		PortfolioManager.pending_orders = remain
 		_render_portfolio()
 		_render_pending()
 
 func _render_pending():
 	for c in pending_vbox.get_children():
 		c.queue_free()
-	if G["pendingOrders"].is_empty():
+	if PortfolioManager.pending_orders.is_empty():
 		pending_box.visible = false
 		return
 	pending_box.visible = true
-	for i in G["pendingOrders"].size():
-		var o: Dictionary = G["pendingOrders"][i]
+	for o: Dictionary in PortfolioManager.pending_orders:
+		var ticker: String = str(o["stock_code"])
+		var s_idx: int = _idx_for_ticker(ticker)
+		var sname: String = STOCKS[s_idx]["name"] if s_idx >= 0 else ticker
 		var hb = HBoxContainer.new()
 		var col: Color = C_UP if o["type"] == "buy" else C_DOWN
-		var lbl = _lbl("%s %s %d주 @%s" % [STOCKS[o["idx"] as int]["name"] as String, "매수" if o["type"]=="buy" else "매도", o["qty"] as int, fmt(o["price"] as int)], col, 10)
+		var lbl = _lbl("%s %s %d주 @%s" % [sname, "매수" if o["type"]=="buy" else "매도", int(o["quantity"]), fmt(int(o["price"]))], col, 10)
 		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(lbl)
 		var cancel_btn = _btn("취소", Color(C_DOWN.r,C_DOWN.g,C_DOWN.b,0.15), C_DOWN, 4)
 		cancel_btn.add_theme_font_size_override("font_size", 9)
-		var oi: int = i
+		var order_id: String = str(o["id"])
 		cancel_btn.pressed.connect(func():
-			var ord: Dictionary = G["pendingOrders"][oi]
-			if ord["type"] == "buy":
-				G["cash"] = (G["cash"] as int) + (ord["price"] as int) * (ord["qty"] as int)
-			G["pendingOrders"].remove_at(oi)
+			PortfolioManager.cancel_order(order_id)  # 내부에서 매수 주문 현금 환불 처리
 			_render_pending()
 			_update_right_panel()
 			_update_hud()
@@ -1789,20 +2253,34 @@ func _render_pending():
 # PHASE C – 결산
 # ═══════════════════════════════════
 func _go_settle():
+	# 미체결 지정가 매수 주문 환불 (현금은 주문 시 이미 차감됨)
 	G["refundAmt"] = 0
-	for o in G["pendingOrders"]:
-		if o["type"] == "buy": G["cash"] += o["price"] * o["qty"]; G["refundAmt"] += o["price"] * o["qty"]
-	G["pendingOrders"] = []
+	var orders_copy = PortfolioManager.pending_orders.duplicate()
+	PortfolioManager.pending_orders.clear()
+	for o in orders_copy:
+		if o["type"] == "buy":
+			var refund_amt: int = int(o["quantity"]) * int(o["price"])
+			PortfolioManager.cash += refund_amt
+			G["refundAmt"] = (G["refundAmt"] as int) + refund_amt
+
 	G["rentDue"] = (G["rentDue"] as int) - 1
 	var rent_paid: bool = (G["rentDue"] as int) <= 0
 	if rent_paid: G["rentDue"] = 30
 	G["todayExpense"] = FOOD + (RENT if rent_paid else 0)
-	G["cash"] = (G["cash"] as int) - (G["todayExpense"] as int)
-	if G["cash"] < 0: _toast("현금이 부족합니다! 긴급 상황!", "err")
+	PortfolioManager.cash -= G["todayExpense"]
+
+	if PortfolioManager.cash < 0:
+		PortfolioManager.cash = 0
+		_update_hud()
+		GameManager.trigger_game_over("생활비 부족")
+		return
 
 	var eval_pnl: int = 0
-	for k in G["portfolio"]:
-		eval_pnl += (prices[k] - (G["portfolio"][k]["avgPrice"] as int)) * (G["portfolio"][k].get("qty", 0) as int)
+	for tkr in PortfolioManager.holdings:
+		var h_idx := _idx_for_ticker(tkr)
+		if h_idx >= 0:
+			var h: Dictionary = PortfolioManager.holdings[tkr]
+			eval_pnl += (prices[h_idx] - int(h["avg_price"])) * int(h["quantity"])
 	var total: int  = _get_total_asset()
 	var pct: float  = _get_goal_pct()
 
@@ -1823,61 +2301,159 @@ func _go_settle():
 	gpb_pct_lbl.text   = "%.1f%%" % pct
 	gpb_bar.value      = pct
 
+	sc_day_lbl.text = "🌙  DAY %d 야간 정산" % G["day"]
+
 	for c in s_holdings_vbox.get_children(): c.queue_free()
-	var held := []
-	for k in G["portfolio"]:
-		if G["portfolio"][k].get("qty", 0) > 0: held.append(k)
-	if held.is_empty():
+	if PortfolioManager.holdings.is_empty():
 		s_holdings_vbox.add_child(_lbl("보유 종목 없음", C_TEXT3, 11))
 	else:
-		for k in held:
-			var p: Dictionary = G["portfolio"][k]
-			var pnl: int = (prices[k] - (p["avgPrice"] as int)) * (p["qty"] as int)
-			var hb = HBoxContainer.new()
-			var kl = _lbl("%s %d주" % [STOCKS[k]["name"] as String, p["qty"] as int], C_TEXT2, 11)
-			kl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			hb.add_child(kl)
-			var vl = _lbl("%s%s원" % ["+" if pnl>=0 else "", fmt(pnl)], C_UP if pnl>=0 else C_DOWN, 11)
-			hb.add_child(vl)
-			s_holdings_vbox.add_child(hb)
+		for tkr in PortfolioManager.holdings:
+			var h_idx := _idx_for_ticker(tkr)
+			if h_idx < 0: continue
+			var h: Dictionary = PortfolioManager.holdings[tkr]
+			var qty: int = int(h["quantity"]); var avg: int = int(h["avg_price"])
+			var cur: int = prices[h_idx]
+			var pnl: int = (cur - avg) * qty
+			var rate: float = float(pnl) / float(max(avg * qty, 1)) * 100.0
+			var pcol: Color = C_UP if pnl >= 0 else C_DOWN
+			var item = PanelContainer.new()
+			item.add_theme_stylebox_override("panel",
+				_sb(Color(pcol.r,pcol.g,pcol.b,0.06), 1, Color(pcol.r,pcol.g,pcol.b,0.18), 7))
+			s_holdings_vbox.add_child(item)
+			var iv = VBoxContainer.new(); iv.add_theme_constant_override("separation", 3); item.add_child(iv)
+			var top_hb = HBoxContainer.new(); iv.add_child(top_hb)
+			var nl = _lbl(STOCKS[h_idx]["name"] as String, C_TEXT, 11)
+			nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top_hb.add_child(nl)
+			top_hb.add_child(_lbl("%s%s원  (%.1f%%)" % ["+" if pnl>=0 else "", fmt(pnl), rate], pcol, 11))
+			var bot_hb = HBoxContainer.new(); iv.add_child(bot_hb)
+			bot_hb.add_child(_lbl(
+				"%d주 · 평균 %s원 · 현재 %s원" % [qty, fmt(avg), fmt(cur)], C_TEXT3, 9))
 
 	G["workDone"] = false; G["workIncome"] = 0
-	wo_cv_btn.disabled = false; wo_tutor_btn.disabled = false; wo_rest_btn.disabled = false
-	settle_act_ctrl.visible = false
+	_reset_work_selection()
+	_render_settle_history()
 	_update_hud()
 	show_screen("settle")
+
+func _render_settle_history() -> void:
+	for c in settle_hist_vbox.get_children(): c.queue_free()
+	var all_today := trade_history.filter(func(t): return int(t["day"]) == int(G["day"]))
+	if all_today.is_empty():
+		settle_hist_vbox.add_child(_lbl("오늘 체결 없음", C_TEXT3, 11)); return
+	# 최근 5건만 표시
+	var display := all_today.slice(max(0, all_today.size() - 5))
+	if all_today.size() > 5:
+		settle_hist_vbox.add_child(_lbl("… 앞 %d건 생략" % (all_today.size() - 5), C_TEXT3, 9))
+	for t: Dictionary in display:
+		var is_buy: bool = str(t["type"]) == "buy"
+		var type_col: Color = C_DOWN if is_buy else C_BLUE
+		var hb = HBoxContainer.new(); hb.add_theme_constant_override("separation", 6)
+		var type_lbl = _lbl("▲매수" if is_buy else "▼매도", type_col, 10)
+		type_lbl.custom_minimum_size.x = 38; hb.add_child(type_lbl)
+		var info_lbl = _lbl("%s  %d주  @%s" % [str(t["name"]), int(t["qty"]), fmt(int(t["price"]))], C_TEXT2, 10)
+		info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hb.add_child(info_lbl)
+		var pnl: int = int(t.get("pnl", 0))
+		if not is_buy and pnl != 0:
+			var pcol: Color = C_UP if pnl >= 0 else C_DOWN
+			hb.add_child(_lbl(("%s%s원" % ["+" if pnl>=0 else "", fmt(pnl)]), pcol, 10))
+		settle_hist_vbox.add_child(hb)
+
+func _select_work(type: String, pay: int) -> void:
+	settle_selected_work = type; settle_selected_pay = pay
+	for cd: Dictionary in settle_work_cards:
+		var is_sel: bool = cd["type"] == type
+		var bc: Color = cd["col"] if is_sel else C_BDR2
+		cd["panel"].add_theme_stylebox_override("panel",
+			_sb(Color(bc.r,bc.g,bc.b,0.1) if is_sel else C_PANEL, 2 if is_sel else 1, bc, 10))
+	settle_cta_btn.disabled = false
+	settle_cta_btn.text = "✅  선택 완료 · 다음 날 진행  →"
+	var gold_sb = _sb(C_GOLD, 0, C_GOLD, 10)
+	settle_cta_btn.add_theme_stylebox_override("normal",  gold_sb)
+	settle_cta_btn.add_theme_stylebox_override("hover",   _sb(C_GOLD.lightened(0.1), 0, C_GOLD, 10))
+	settle_cta_btn.add_theme_stylebox_override("pressed", _sb(C_GOLD.darkened(0.1),  0, C_GOLD, 10))
+	for fc in ["font_color","font_hover_color","font_pressed_color"]:
+		settle_cta_btn.add_theme_color_override(fc, Color.BLACK)
+
+func _reset_work_selection() -> void:
+	settle_selected_work = ""; settle_selected_pay = 0
+	for cd: Dictionary in settle_work_cards:
+		cd["panel"].add_theme_stylebox_override("panel", _sb(C_PANEL, 1, C_BDR2, 10))
+	settle_cta_btn.disabled = true
+	settle_cta_btn.text = "활동을 선택해주세요"
+	settle_cta_btn.add_theme_stylebox_override("normal",  _sb(C_BDR2, 0, C_BDR2, 10))
+	settle_cta_btn.add_theme_stylebox_override("hover",   _sb(C_BDR2, 0, C_BDR2, 10))
+	for fc in ["font_color","font_hover_color","font_pressed_color"]:
+		settle_cta_btn.add_theme_color_override(fc, C_TEXT3)
+
+func _confirm_settle() -> void:
+	if settle_selected_work == "" or G["workDone"]: return
+	_do_work(settle_selected_work, settle_selected_pay)
+	_go_night()
 
 func _do_work(type: String, pay: int):
 	if G["workDone"]: return
 	G["workDone"] = true; G["workIncome"] = pay
-	if pay > 0: G["cash"] += pay; _toast("알바 수입 +%s원" % fmt(pay), "ok")
+	if pay > 0: PortfolioManager.cash += pay; _toast("알바 수입 +%s원" % fmt(pay), "ok")
 	else: _toast("오늘은 쉬기로 했습니다", "warn")
-	wo_cv_btn.disabled = true; wo_tutor_btn.disabled = true; wo_rest_btn.disabled = true
-	settle_act_ctrl.visible = true
 	_update_hud()
 
 # ═══════════════════════════════════
 # PHASE D – 일간
 # ═══════════════════════════════════
 func _go_night():
-	var total: int    = _get_total_asset()
-	var pct: String   = "%.1f%%" % _get_goal_pct()
-	var day_chg: int  = total - (G["startCash"] as int)
-	n_day_lbl.text   = "Day %d" % G["day"]
-	n_total_lbl.text = fmt(total) + "원"
-	n_pnl_lbl.text   = ("%s%s원" % ["+" if day_chg>=0 else "", fmt(day_chg)])
-	n_pnl_lbl.add_theme_color_override("font_color", C_UP if day_chg>=0 else C_DOWN)
-	n_work_lbl.text  = "+%s원" % fmt(G["workIncome"] as int) if (G["workIncome"] as int) > 0 else "없음"
-	n_exp_lbl.text   = "-%s원" % fmt(G["todayExpense"] as int)
-	n_goal_lbl.text  = pct
-	var msgs := ["오늘도 수고했어요 💪","내일엔 더 잘 될 거예요 📈","포기하지 마세요! 내 집은 반드시! 🏠","오늘의 경험이 내일의 수익을 만들어요 ✨","시장은 항상 기회를 줍니다 🎯"]
+	var total: int   = _get_total_asset()
+	var pct: float   = _get_goal_pct()
+	var day_chg: int = total - (G["startCash"] as int)
+	var start: int   = G["startCash"] as int
+	var day_pct: float = (float(day_chg) / float(max(start, 1))) * 100.0
+
+	# 오늘 거래 통계
+	var today_t: Array = trade_history.filter(func(t): return int(t["day"]) == int(G["day"]))
+	var buy_cnt:  int  = today_t.filter(func(t): return str(t["type"]) == "buy").size()
+	var sell_cnt: int  = today_t.filter(func(t): return str(t["type"]) == "sell").size()
+
+	# 1. 헤더
+	n_day_lbl.text = "DAY %d 종료" % G["day"]
+	var msgs := ["오늘도 수고했어요 💪", "내일엔 더 잘 될 거예요 📈",
+		"포기하지 마세요! 내 집은 반드시! 🏠",
+		"오늘의 경험이 내일의 수익을 만들어요 ✨",
+		"시장은 항상 기회를 줍니다 🎯"]
 	night_msg_lbl.text = msgs[randi() % msgs.size()]
+
+	# 2. 핵심 카드
+	n_total_lbl.text = fmt(total) + "원"
+	n_pnl_lbl.text = ("%s%s원" % ["+" if day_chg >= 0 else "", fmt(day_chg)])
+	n_pnl_lbl.add_theme_color_override("font_color", C_UP if day_chg >= 0 else C_DOWN)
+	n_pnl_pct_lbl.text = ("%s%.2f%%" % ["+" if day_pct >= 0 else "", day_pct])
+	n_pnl_pct_lbl.add_theme_color_override("font_color", C_UP if day_pct >= 0 else C_DOWN)
+	n_cnt_lbl.text = "%d회" % (G["tradeCount"] as int)
+
+	# 3. 목표 진행률
+	n_goal_lbl.text  = "%.1f%%" % pct
+	n_goal_bar.value = pct
+	var remain: int  = max(GOAL - total, 0)
+	n_goal_remain_lbl.text = "목표 달성! 🎉" if remain == 0 else "목표까지 %s원" % fmt(remain)
+	n_goal_remain_lbl.add_theme_color_override("font_color", C_GOLD if remain == 0 else C_TEXT3)
+
+	# 4. 상세 내역
+	n_trade_sum_lbl.text = "매수 %d회  ·  매도 %d회" % [buy_cnt, sell_cnt]
+	var real_pnl: int = G["realPnl"] as int
+	n_real_pnl_lbl.text = "실현손익  %s%s원" % ["+" if real_pnl >= 0 else "", fmt(real_pnl)]
+	n_real_pnl_lbl.add_theme_color_override("font_color", C_UP if real_pnl >= 0 else C_DOWN)
+
+	n_exp_lbl.text = "지출  -%s원" % fmt(G["todayExpense"] as int)
+	var work: int = G["workIncome"] as int
+	n_work_lbl.text = ("알바  +%s원" % fmt(work)) if work > 0 else "알바 없음"
+	n_work_lbl.add_theme_color_override("font_color", C_UP if work > 0 else C_TEXT2)
+
 	if total >= GOAL:
-		_toast("🎉 목표 달성! Day %d 내집 마련 성공!" % G["day"], "ok")
+		GameManager.trigger_victory("목표 자산 달성")
+		return
 	show_screen("night")
 
 func _go_morning():
 	G["day"] += 1
+	GameManager.current_day = G["day"]
 	G["startCash"] = _get_total_asset() as int
 	for i in STOCKS.size(): biases[i] = 0.0
 	_init_morning()
@@ -1887,9 +2463,11 @@ func _go_morning():
 # 유틸
 # ═══════════════════════════════════
 func _get_total_asset() -> int:
-	var t: int = G["cash"] as int
-	for k in G["portfolio"]:
-		t += prices[k] * (G["portfolio"][k].get("qty", 0) as int)
+	var t: int = PortfolioManager.cash
+	for tkr in PortfolioManager.holdings:
+		var h_idx := _idx_for_ticker(tkr)
+		if h_idx >= 0:
+			t += prices[h_idx] * int(PortfolioManager.holdings[tkr]["quantity"])
 	return t
 
 func _get_goal_pct() -> float:
@@ -1911,3 +2489,76 @@ func _toast(msg: String, _type: String = "ok"):
 	toast_lbl.text = msg
 	toast_panel.visible = true
 	toast_tmr.stop(); toast_tmr.start()
+
+# ═══════════════════════════════════
+# 세이브 / 로드
+# ═══════════════════════════════════
+const SAVE_PATH := "user://save_data.json"
+
+func _save_game() -> void:
+	var data := {
+		"version": 1,
+		"day": G["day"],
+		"startCash": G["startCash"],
+		"rentDue": G["rentDue"],
+		"cash": PortfolioManager.cash,
+		"holdings": {},
+		"trade_history": trade_history.duplicate(true)
+	}
+	for tkr in PortfolioManager.holdings:
+		var h: Dictionary = PortfolioManager.holdings[tkr]
+		data["holdings"][tkr] = {"quantity": int(h["quantity"]), "avg_price": float(h["avg_price"])}
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(data, "\t"))
+		file.close()
+		_toast("Day %d 저장 완료" % G["day"], "ok")
+	else:
+		_toast("저장 실패", "err")
+
+func _load_game() -> void:
+	if not FileAccess.file_exists(SAVE_PATH):
+		_toast("저장 파일 없음", "warn"); return
+	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if not file: _toast("불러오기 실패", "err"); return
+	var json := JSON.new()
+	if json.parse(file.get_as_text()) != OK:
+		file.close(); _toast("파일 손상됨", "err"); return
+	file.close()
+	var d: Dictionary = json.data
+	G["day"]       = int(d.get("day",       1))
+	G["startCash"] = int(d.get("startCash", 10000000))
+	G["rentDue"]   = int(d.get("rentDue",   30))
+	G["todayPnl"] = 0; G["realPnl"] = 0; G["tradeCount"] = 0
+	G["workDone"] = false; G["workIncome"] = 0; G["todayExpense"] = 0
+	G["newsSelected"] = ""; G["curStock"] = 0; G["tickIdx"] = 0
+	PortfolioManager.cash = int(d.get("cash", 10000000))
+	PortfolioManager.holdings.clear()
+	PortfolioManager.pending_orders.clear()
+	var h_data: Dictionary = d.get("holdings", {})
+	for tkr in h_data:
+		PortfolioManager.holdings[str(tkr)] = {
+			"quantity": int(h_data[tkr]["quantity"]),
+			"avg_price": float(h_data[tkr]["avg_price"])
+		}
+	trade_history = d.get("trade_history", []).duplicate(true)
+	GameManager.current_day = G["day"]
+	GameManager.is_game_over = false
+	GameManager.is_victory = false
+	for i in STOCKS.size():
+		prices[i] = STOCKS[i]["base"]
+		all_hist[i] = [STOCKS[i]["base"]]
+		biases[i] = 0.0
+	_init_morning()
+	show_screen("morning")
+	_toast("Day %d 로드 완료" % G["day"], "ok")
+
+# ── PortfolioManager 헬퍼 ──
+func _ticker(idx: int) -> String:
+	return STOCKS[idx].get("ticker", STOCKS[idx]["name"])
+
+func _idx_for_ticker(ticker: String) -> int:
+	for i in STOCKS.size():
+		if STOCKS[i].get("ticker", STOCKS[i]["name"]) == ticker:
+			return i
+	return -1

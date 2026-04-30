@@ -137,6 +137,8 @@ func buy_limit(stock_code: String, quantity: int, limit_price: int) -> bool:
 		print("지정가 매수 실패: 현금 부족")
 		return false
 
+	cash -= total_cost  # 주문 시 현금 즉시 차감(잠금)
+
 	var order = {
 		"id": str(next_order_id),
 		"type": "buy",
@@ -260,6 +262,10 @@ func process_pending_orders():
 func cancel_order(order_id: String) -> bool:
 	for i in range(pending_orders.size()):
 		if pending_orders[i]["id"] == order_id:
+			var order = pending_orders[i]
+			if order["type"] == "buy":
+				# 지정가 매수 주문 취소 시 잠긴 현금 환불
+				cash += int(order["quantity"]) * int(order["price"])
 			pending_orders.remove_at(i)
 			print("[주문 취소] 주문 ID:", order_id)
 			portfolio_changed.emit()
