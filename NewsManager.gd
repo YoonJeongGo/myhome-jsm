@@ -129,11 +129,7 @@ var today_news: Dictionary = {}
 func _ready() -> void:
 	randomize()
 
-	if has_node("/root/TimeManager"):
-		if TimeManager.has_signal("info_phase_started"):
-			TimeManager.info_phase_started.connect(_generate_today_news)
-	else:
-		print("[경고] NewsManager: TimeManager Autoload를 찾을 수 없습니다.")
+	pass  # main.gd에서 직접 처리
 
 func _generate_today_news() -> void:
 	var stock_ids: Array = STOCK_NEWS_DATA.keys()

@@ -10,7 +10,7 @@ signal victory_triggered(reason: String)
 # =========================
 # 게임 기본 설정
 # =========================
-@export var start_cash: int = 1000000
+@export var start_cash: int = 10000000
 @export var daily_living_cost: int = 50000
 @export var target_total_assets: int = 30000000
 
@@ -132,7 +132,7 @@ func get_total_assets() -> int:
 	if not has_node("/root/PortfolioManager"):
 		return 0
 
-	return PortfolioManager.get_total_asset()
+	return PortfolioManager.get_total_value()
 
 func emit_total_assets_changed() -> void:
 	var total_assets: int = get_total_assets()

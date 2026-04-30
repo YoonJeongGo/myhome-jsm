@@ -1,6 +1,7 @@
 extends Node
 
 signal prices_updated()
+signal market_data_loaded()
 
 var stocks = {}
 var stock_names = []
@@ -21,8 +22,7 @@ func _ready():
 	randomize()
 	load_market_data(MARKET_DATA_PATH)
 
-	if has_node("/root/TimeManager") and TimeManager.has_signal("time_changed"):
-		TimeManager.time_changed.connect(Callable(self, "_on_time_changed"))
+	# TimeManager 연결 제거 (main.gd에서 직접 처리)
 
 func load_market_data(file_path: String) -> void:
 	_reset_all_data()
@@ -72,6 +72,7 @@ func load_market_data(file_path: String) -> void:
 
 	file.close()
 	_build_runtime()
+	market_data_loaded.emit()
 
 	if stock_names.is_empty():
 		push_error("종목 데이터 없음")
@@ -94,6 +95,13 @@ func tick_realtime():
 
 		stocks[stock_name]["price"] = price
 		intraday_history[stock_name].append(price)
+
+	# 미체결 주문 처리
+	if has_node("/root/PortfolioManager"):
+		var portfolio_manager = get_node("/root/PortfolioManager")
+		portfolio_manager.process_pending_orders()
+
+	prices_updated.emit()
 
 func advance_day():
 	tick_index = 0
